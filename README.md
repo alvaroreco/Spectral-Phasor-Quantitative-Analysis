@@ -26,20 +26,52 @@ The implementation of the spectral phasor calculation follows the mathematical f
 
 ## Requirements
 
-The code was developed and tested using **Python 3.9.7**.
-
-The required Python packages and the versions used for the analyses are listed in `requirements.txt`:
+The code was developed and tested using **Python 3.9.7** with the following package versions:
 
 * NumPy 1.20.3
 * SciPy 1.7.1
 * Matplotlib 3.4.3
 * pandas 1.3.4
 
-The required packages can be installed using:
+Two installation options are provided.
+
+### Option 1: Conda environment (recommended)
+
+An `environment.yml` file is provided to create a complete environment with the required Python version, packages, and Tk support for graphical output.
+
+If Anaconda or Miniconda is installed, create the environment from the repository directory:
+
+```bash
+conda env create -f environment.yml
+```
+
+Activate the environment:
+
+```bash
+conda activate spectral-phasor
+```
+
+The scripts can then be run directly:
+
+```bash
+python phasor_plot.py
+```
+
+or:
+
+```bash
+python phasor_thermodynamic_analysis.py
+```
+
+### Option 2: pip
+
+Alternatively, the required Python packages can be installed using:
 
 ```bash
 pip install -r requirements.txt
 ```
+
+The `requirements.txt` file specifies the package versions used for the analyses.
 
 ## Input data
 
@@ -133,6 +165,7 @@ Spectral-Phasor-Quantitative-Analysis/
 │
 ├── README.md
 ├── requirements.txt
+├── environment.yml
 ├── data_reader.py
 ├── phasor_functions.py
 ├── phasor_plot.py
@@ -165,7 +198,7 @@ The repository contains the Python implementation used for the analyses reported
 
 The mathematical implementation of the spectral phasor coordinates and thermodynamic analysis is kept consistent with the analysis described in the publication.
 
-The Python version and package versions used for the analyses are specified to facilitate reproducibility.
+The Python version and package versions used for the analyses are specified in both `requirements.txt` and `environment.yml` to facilitate reproducibility across different systems.
 
 ## Citation
 
