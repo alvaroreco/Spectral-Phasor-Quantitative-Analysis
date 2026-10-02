@@ -1,48 +1,56 @@
 """
 Functions for loading fluorescence spectral data.
 
-The module allows the user to select the data folder, file format,
-data organization, and data files.
+The module allows the user to select:
+    - the data folder,
+    - the data organization,
+    - the file format,
+    - the data files,
+    - the number of header rows to skip.
 
-For files containing multiple spectra, experimental x-values are
-automatically extracted from column labels in the format:
+Two data organizations are supported:
 
-    x=0.000
-    x=0.150
-    x=0.300
-    ...
+1. One spectrum per file
+   The filename is used as the spectrum label.
+   For example:
+       A1.txt
+       A2.txt
+       Control.txt
 
-For files containing one spectrum each, all files are loaded by
-default. A subset of files can also be selected manually.
+2. Multiple spectra in one file
+   The first row contains:
+       condition | spectrum_label_1 | spectrum_label_2 | ...
+
+   The first column contains wavelengths and the remaining columns
+   contain the corresponding spectra.
+
+For thermodynamic analysis, spectrum labels must be numerical.
+For example:
+       0.000
+       0.026
+       0.051
 
 The original load_data() function keeps its three-value return
-structure for compatibility with phasor_plot.py.
+structure for compatibility.
 """
 
-
 from pathlib import Path
+import re
 
 import numpy as np
 import pandas as pd
 
 
-# -------------------------------------------------------------------
-# Select data folder
-# -------------------------------------------------------------------
+# =============================================================================
+# DATA FOLDER SELECTION
+# =============================================================================
 
 def select_data_folder(data_directory):
-    """
-    Select the folder containing the experimental data.
-
-    Press Enter to use the main data directory.
-    """
+    """Select the folder containing the spectral data."""
 
     folders = sorted(
-        [
-            folder
-            for folder in data_directory.iterdir()
-            if folder.is_dir()
-        ]
+        [folder for folder in data_directory.iterdir() if folder.is_dir()],
+        key=lambda path: path.name.lower()
     )
 
     if not folders:
@@ -50,342 +58,303 @@ def select_data_folder(data_directory):
 
     print("\nAvailable data folders:")
 
-    for i, folder in enumerate(folders, start=1):
-        print(f"{i}. {folder.name}")
+    for index, folder in enumerate(folders, start=1):
+        print(f"{index}. {folder.name}")
 
-    while True:
+    print(
+        "\nSelect a data folder by number "
+        "(press Enter for the main 'data' folder): ",
+        end=""
+    )
 
-        selection = input(
-            "\nSelect a data folder by number "
-            "(press Enter for the main 'data' folder): "
-        ).strip()
+    selection = input().strip()
 
-        if selection == "":
-            return data_directory
+    if selection == "":
+        return data_directory
 
-        try:
-            selection = int(selection)
+    try:
+        selection = int(selection)
+    except ValueError:
+        raise ValueError("Invalid folder selection.")
 
-            if 1 <= selection <= len(folders):
-                return folders[selection - 1]
+    if selection < 1 or selection > len(folders):
+        raise ValueError("Invalid folder selection.")
 
-        except ValueError:
-            pass
-
-        print(
-            "Invalid selection. Please enter a valid number."
-        )
+    return folders[selection - 1]
 
 
-# -------------------------------------------------------------------
-# Select file format
-# -------------------------------------------------------------------
+# =============================================================================
+# FILE FORMAT SELECTION
+# =============================================================================
 
 def select_file_format():
-    """
-    Select the format of the spectral data files.
-    """
-
-    print("\nAvailable file formats:")
-
-    print("1. CSV")
-    print("2. TXT")
-    print("3. DAT")
-    print("4. Excel (.xlsx)")
-    print("5. Excel (.xls)")
+    """Select the spectral file format."""
 
     formats = {
         "1": ".csv",
         "2": ".txt",
         "3": ".dat",
         "4": ".xlsx",
-        "5": ".xls"
+        "5": ".xls",
     }
 
-    while True:
+    print("\nAvailable file formats:")
+    print("1. CSV")
+    print("2. TXT")
+    print("3. DAT")
+    print("4. Excel (.xlsx)")
+    print("5. Excel (.xls)")
 
-        selection = input(
-            "\nSelect the file format by number: "
-        ).strip()
+    selection = input("\nSelect the file format by number: ").strip()
 
-        if selection in formats:
-            return formats[selection]
+    if selection not in formats:
+        raise ValueError("Invalid file format selection.")
 
-        print(
-            "Invalid selection. Please enter a number "
-            "between 1 and 5."
-        )
+    return formats[selection]
 
 
-# -------------------------------------------------------------------
-# Select one data file
-# -------------------------------------------------------------------
+# =============================================================================
+# FILE SELECTION
+# =============================================================================
 
 def select_data_file(folder, file_extension):
-    """
-    Select a single data file.
-    """
+    """Select one spectral data file."""
 
     files = sorted(
         [
             file
             for file in folder.iterdir()
-            if file.is_file()
-            and file.suffix.lower() == file_extension
-        ]
+            if file.is_file() and file.suffix.lower() == file_extension
+        ],
+        key=lambda path: path.name.lower()
     )
 
     if not files:
-
         raise FileNotFoundError(
-            f"No {file_extension} files were found "
-            f"in '{folder}'."
+            f"No {file_extension} files were found in:\n{folder}"
         )
 
-    print(
-        f"\nAvailable {file_extension} files:"
-    )
+    print(f"\nAvailable {file_extension} files:")
 
-    for i, file in enumerate(files, start=1):
-        print(f"{i}. {file.name}")
+    for index, file in enumerate(files, start=1):
+        print(f"{index}. {file.name}")
 
-    while True:
+    selection = input("\nSelect the file by number: ").strip()
 
-        selection = input(
-            "\nSelect the data file by number: "
-        ).strip()
+    try:
+        selection = int(selection)
+    except ValueError:
+        raise ValueError("Invalid file selection.")
 
-        try:
+    if selection < 1 or selection > len(files):
+        raise ValueError("Invalid file selection.")
 
-            selection = int(selection)
-
-            if 1 <= selection <= len(files):
-                return files[selection - 1]
-
-        except ValueError:
-            pass
-
-        print(
-            "Invalid selection. Please enter a valid number."
-        )
+    return files[selection - 1]
 
 
-# -------------------------------------------------------------------
-# Select multiple data files
-# -------------------------------------------------------------------
+def _parse_file_selection(selection, number_of_files):
+    """
+    Parse a file selection string.
+
+    Accepted formats:
+        Enter       -> all files
+        1-4         -> files 1 through 4
+        1,3,5       -> files 1, 3 and 5
+        1-4,7,10-12 -> combinations
+    """
+
+    if selection == "":
+        return list(range(number_of_files))
+
+    selected_indices = set()
+
+    parts = [part.strip() for part in selection.split(",")]
+
+    for part in parts:
+
+        if "-" in part:
+            bounds = [value.strip() for value in part.split("-")]
+
+            if len(bounds) != 2:
+                raise ValueError(
+                    f"Invalid range '{part}'."
+                )
+
+            try:
+                start = int(bounds[0])
+                end = int(bounds[1])
+            except ValueError:
+                raise ValueError(
+                    f"Invalid range '{part}'."
+                )
+
+            if start > end:
+                start, end = end, start
+
+            if start < 1 or end > number_of_files:
+                raise ValueError(
+                    f"File range '{part}' is outside the available files."
+                )
+
+            for index in range(start, end + 1):
+                selected_indices.add(index - 1)
+
+        else:
+            try:
+                index = int(part)
+            except ValueError:
+                raise ValueError(
+                    f"Invalid file selection '{part}'."
+                )
+
+            if index < 1 or index > number_of_files:
+                raise ValueError(
+                    f"File number {index} is outside the available files."
+                )
+
+            selected_indices.add(index - 1)
+
+    return sorted(selected_indices)
+
 
 def select_data_files(folder, file_extension):
-    """
-    Select multiple data files.
-
-    By default, pressing Enter loads all files.
-
-    The user can also specify files using ranges or individual
-    indices, for example:
-
-        1-4
-        1,3,5
-        1-3,5
-    """
+    """Select multiple spectral data files."""
 
     files = sorted(
         [
             file
             for file in folder.iterdir()
-            if file.is_file()
-            and file.suffix.lower() == file_extension
-        ]
+            if file.is_file() and file.suffix.lower() == file_extension
+        ],
+        key=lambda path: path.name.lower()
     )
 
     if not files:
-
         raise FileNotFoundError(
-            f"No {file_extension} files were found "
-            f"in '{folder}'."
+            f"No {file_extension} files were found in:\n{folder}"
         )
 
-    print(
-        f"\nAvailable {file_extension} files:"
+    print(f"\nAvailable {file_extension} files:")
+
+    for index, file in enumerate(files, start=1):
+        print(f"{index}. {file.name}")
+
+    selection = input(
+        "\nSelect the spectra to load "
+        "(press Enter to load all files, or enter e.g. 1-4 or 1,3,5): "
+    ).strip()
+
+    selected_indices = _parse_file_selection(
+        selection,
+        len(files)
     )
 
-    for i, file in enumerate(files, start=1):
-        print(f"{i}. {file.name}")
-
-    while True:
-
-        selection = input(
-            "\nSelect the spectra to load "
-            "(press Enter to load all files, "
-            "or enter e.g. 1-4 or 1,3,5): "
-        ).strip()
-
-        # -----------------------------------------------------------
-        # Load all files
-        # -----------------------------------------------------------
-
-        if selection == "":
-            return files
-
-        # -----------------------------------------------------------
-        # Parse selected files
-        # -----------------------------------------------------------
-
-        try:
-
-            selected_indices = set()
-
-            parts = selection.split(",")
-
-            for part in parts:
-
-                part = part.strip()
-
-                if "-" in part:
-
-                    start, end = part.split("-", 1)
-
-                    start = int(start.strip())
-                    end = int(end.strip())
-
-                    if start > end:
-                        raise ValueError
-
-                    selected_indices.update(
-                        range(start, end + 1)
-                    )
-
-                else:
-
-                    selected_indices.add(
-                        int(part)
-                    )
-
-            # -------------------------------------------------------
-            # Validate indices
-            # -------------------------------------------------------
-
-            if not selected_indices:
-                raise ValueError
-
-            if any(
-                index < 1 or index > len(files)
-                for index in selected_indices
-            ):
-                raise ValueError
-
-            selected_indices = sorted(
-                selected_indices
-            )
-
-            return [
-                files[index - 1]
-                for index in selected_indices
-            ]
-
-        except ValueError:
-
-            print(
-                "Invalid selection. Please use a format such as "
-                "'1-4' or '1,3,5'."
-            )
+    return [files[index] for index in selected_indices]
 
 
-# -------------------------------------------------------------------
-# Select data organization
-# -------------------------------------------------------------------
+# =============================================================================
+# DATA ORGANIZATION SELECTION
+# =============================================================================
 
 def select_data_organization():
-    """
-    Select how the spectra are organized.
-    """
+    """Select how the spectra are organized."""
 
     print("\nHow are the spectra organized?")
-
     print("1. One spectrum per file")
     print("2. Multiple spectra in one file")
 
-    while True:
+    selection = input("\nSelect an option: ").strip()
 
-        selection = input(
-            "\nSelect an option: "
-        ).strip()
+    if selection not in {"1", "2"}:
+        raise ValueError("Invalid data organization selection.")
 
-        if selection in ["1", "2"]:
-            return int(selection)
-
-        print(
-            "Invalid selection. Please enter 1 or 2."
-        )
+    return int(selection)
 
 
-# -------------------------------------------------------------------
-# Number of header rows
-# -------------------------------------------------------------------
+# =============================================================================
+# HEADER SELECTION
+# =============================================================================
 
 def select_header_rows():
-    """
-    Ask how many rows should be skipped before reading the data.
-    """
+    """Select the number of header rows to skip."""
 
-    while True:
+    selection = input(
+        "\nNumber of header rows to skip (press Enter for 0): "
+    ).strip()
 
-        selection = input(
-            "\nNumber of header rows to skip "
-            "(press Enter for 0): "
-        ).strip()
+    if selection == "":
+        return 0
 
-        if selection == "":
-            return 0
-
-        try:
-
-            skiprows = int(selection)
-
-            if skiprows >= 0:
-                return skiprows
-
-        except ValueError:
-            pass
-
-        print(
-            "Please enter a non-negative integer."
+    try:
+        skiprows = int(selection)
+    except ValueError:
+        raise ValueError(
+            "The number of header rows must be an integer."
         )
 
+    if skiprows < 0:
+        raise ValueError(
+            "The number of header rows cannot be negative."
+        )
 
-# -------------------------------------------------------------------
-# Read spectral file
-# -------------------------------------------------------------------
+    return skiprows
 
-def read_spectral_file(file_path, skiprows=0):
+
+# =============================================================================
+# FILE READING
+# =============================================================================
+
+def read_spectral_file(file_path, skiprows=0, header=None):
     """
     Read a spectral data file.
+
+    TXT and DAT files are attempted with several common encodings.
     """
 
     suffix = file_path.suffix.lower()
 
     if suffix == ".csv":
 
-        data = pd.read_csv(
+        return pd.read_csv(
             file_path,
-            skiprows=skiprows
+            skiprows=skiprows,
+            header=header
         )
 
     elif suffix in [".xlsx", ".xls"]:
 
-        data = pd.read_excel(
+        return pd.read_excel(
             file_path,
-            skiprows=skiprows
+            skiprows=skiprows,
+            header=header
         )
 
     elif suffix in [".txt", ".dat"]:
 
-        data = pd.read_csv(
-            file_path,
-            sep=None,
-            engine="python",
-            header=None,
-            skiprows=skiprows
-        )
+        encodings = [
+            "utf-8",
+            "cp1252",
+            "latin1",
+        ]
+
+        last_error = None
+
+        for encoding in encodings:
+
+            try:
+                return pd.read_csv(
+                    file_path,
+                    sep=None,
+                    engine="python",
+                    header=header,
+                    skiprows=skiprows,
+                    encoding=encoding
+                )
+
+            except UnicodeDecodeError as error:
+                last_error = error
+
+        raise last_error
 
     else:
 
@@ -393,99 +362,75 @@ def read_spectral_file(file_path, skiprows=0):
             f"Unsupported file format: {suffix}"
         )
 
-    return data
 
+# =============================================================================
+# NUMERICAL LABEL EXTRACTION
+# =============================================================================
 
-# -------------------------------------------------------------------
-# Extract x-values
-# -------------------------------------------------------------------
+def extract_x_value(label):
+    """
+    Extract a numerical x-value from a spectrum label.
+
+    This function is used only for quantitative thermodynamic analysis.
+
+    Examples accepted:
+        0.000
+        0.026
+        0.051
+        -0.100
+        1e-3
+    """
+
+    label = str(label).strip()
+
+    try:
+        return float(label)
+
+    except ValueError as error:
+
+        raise ValueError(
+            f"Could not extract a numerical x-value from the "
+            f"spectrum label '{label}'.\n\n"
+            "For thermodynamic analysis, spectrum labels must be "
+            "numerical, for example:\n"
+            "    0.000\n"
+            "    0.026\n"
+            "    0.051"
+        ) from error
+
 
 def extract_x_values(labels):
-    """
-    Extract numerical x-values from spectrum labels.
-
-    Accepted formats include:
-
-        x=0.000
-        x=0.150
-        x=0.300
-
-    or simply:
-
-        0.000
-        0.150
-        0.300
-    """
-
-    x_values = []
-
-    for label in labels:
-
-        label = str(label).strip()
-
-        # -----------------------------------------------------------
-        # Remove optional 'x=' prefix
-        # -----------------------------------------------------------
-
-        if label.startswith("x="):
-
-            value = label.split(
-                "=",
-                1
-            )[1]
-
-        else:
-
-            value = label
-
-        # -----------------------------------------------------------
-        # Convert to numerical value
-        # -----------------------------------------------------------
-
-        try:
-
-            x_value = float(value)
-
-        except ValueError as error:
-
-            raise ValueError(
-                f"Could not extract a numerical x-value "
-                f"from the spectrum label '{label}'.\n\n"
-                "Accepted formats are, for example:\n"
-                "    x=0.150\n"
-                "    0.150"
-            ) from error
-
-        x_values.append(
-            x_value
-        )
+    """Convert a sequence of numerical spectrum labels into x-values."""
 
     return np.asarray(
-        x_values,
+        [extract_x_value(label) for label in labels],
         dtype=float
     )
 
-# -------------------------------------------------------------------
-# Load multiple spectra from one file
-# -------------------------------------------------------------------
 
-def load_multiple_spectra_file(
-    file_path,
-    skiprows
-):
+# =============================================================================
+# MULTIPLE SPECTRA IN ONE FILE
+# =============================================================================
+
+def load_multiple_spectra_file(file_path, skiprows):
     """
-    Load multiple fluorescence spectra from one file.
+    Load a file containing multiple spectra.
 
-    The first column contains wavelengths.
-    Each subsequent column contains one spectrum.
+    Expected structure:
 
-    Spectrum labels are taken from the column names and x-values
-    are extracted automatically.
+        condition    label_1    label_2    label_3
+        wavelength   intensity  intensity  intensity
+        wavelength   intensity  intensity  intensity
+        ...
+
+    The first cell of the first row is the experimental condition.
+    The remaining cells of the first row are the spectrum labels.
     """
 
     data = read_spectral_file(
         file_path,
-        skiprows
+        skiprows=skiprows,
+        header=None
     )
 
     if data.shape[1] < 3:
@@ -495,37 +440,50 @@ def load_multiple_spectra_file(
             "one wavelength column and two spectra."
         )
 
-    # Wavelengths
+    # First cell of the first row:
+    # experimental variable name, e.g. [Denaturant]
+    condition = str(data.iloc[0, 0]).strip()
 
-    wavelengths = np.asarray(
-        data.iloc[:, 0],
-        dtype=float
-    )
-
-    # Spectra
-
-    spectra = np.asarray(
-        data.iloc[:, 1:],
-        dtype=float
-    ).T
-
-    # Labels
-
+    # Remaining cells of first row:
+    # spectrum labels, e.g. 0.000, 0.026, 0.051
     labels = [
-        str(label)
-        for label in data.columns[1:]
+        str(label).strip()
+        for label in data.iloc[0, 1:]
     ]
 
-    # x-values
+    # First column, starting from second row:
+    # wavelengths
+    wavelengths = pd.to_numeric(
+        data.iloc[1:, 0],
+        errors="coerce"
+    ).to_numpy(dtype=float)
 
-    x_values = extract_x_values(
-        labels
+    spectra = []
+
+    for column in range(1, data.shape[1]):
+
+        spectrum = pd.to_numeric(
+            data.iloc[1:, column],
+            errors="coerce"
+        ).to_numpy(dtype=float)
+
+        spectra.append(spectrum)
+
+    spectra = np.asarray(
+        spectra,
+        dtype=float
     )
 
-    if len(x_values) != len(spectra):
+    # Remove rows with invalid wavelength values.
+    valid = np.isfinite(wavelengths)
+
+    wavelengths = wavelengths[valid]
+    spectra = spectra[:, valid]
+
+    if len(labels) != len(spectra):
 
         raise ValueError(
-            "The number of x-values does not match "
+            "The number of spectrum labels does not match "
             "the number of spectra."
         )
 
@@ -533,84 +491,95 @@ def load_multiple_spectra_file(
         wavelengths,
         spectra,
         labels,
-        x_values
+        condition
     )
 
 
-# -------------------------------------------------------------------
-# Load one spectrum
-# -------------------------------------------------------------------
+# =============================================================================
+# SINGLE SPECTRUM FILE
+# =============================================================================
 
-def load_single_spectrum_file(
-    file_path,
-    skiprows
-):
+def load_single_spectrum_file(file_path, skiprows):
     """
-    Load one fluorescence spectrum.
+    Load one spectrum from a file.
 
-    The first column contains wavelengths.
-    The second column contains fluorescence intensity.
+    Expected structure:
+
+        wavelength    intensity
+        wavelength    intensity
+        ...
     """
 
     data = read_spectral_file(
         file_path,
-        skiprows
+        skiprows=skiprows,
+        header=None
     )
 
     if data.shape[1] < 2:
 
         raise ValueError(
-            "The file must contain at least "
-            "two columns."
+            "The file must contain at least two columns."
         )
 
-    wavelengths = np.asarray(
+    wavelengths = pd.to_numeric(
         data.iloc[:, 0],
-        dtype=float
-    )
+        errors="coerce"
+    ).to_numpy(dtype=float)
 
-    spectrum = np.asarray(
+    spectrum = pd.to_numeric(
         data.iloc[:, 1],
-        dtype=float
+        errors="coerce"
+    ).to_numpy(dtype=float)
+
+    valid = (
+        np.isfinite(wavelengths)
+        & np.isfinite(spectrum)
     )
 
     return (
-        wavelengths,
-        spectrum
+        wavelengths[valid],
+        spectrum[valid]
     )
 
 
-# -------------------------------------------------------------------
-# Load multiple individual spectrum files
-# -------------------------------------------------------------------
+# =============================================================================
+# MULTIPLE FILES, ONE SPECTRUM PER FILE
+# =============================================================================
 
-def load_individual_spectra(
-    file_paths,
-    skiprows
-):
+def load_individual_spectra(file_paths, skiprows):
     """
-    Load spectra stored in separate files.
+    Load several spectra stored in separate files.
 
-    All files must contain the same wavelength values.
+    The filename stem is used as the spectrum label.
+
+    Examples:
+        A1.txt  -> A1
+        A2.txt  -> A2
+        Control.txt -> Control
+
+    No numerical x-value is required at this stage.
     """
 
     wavelengths = None
     spectra = []
     labels = []
 
+    # Alphabetical sorting.
+    # The filename is treated only as a label.
+    file_paths = sorted(
+        file_paths,
+        key=lambda path: path.stem.lower()
+    )
+
+    condition = file_paths[0].parent.name
+
     for file_path in file_paths:
 
-        (
-            current_wavelengths,
-            spectrum
-        ) = load_single_spectrum_file(
+        current_wavelengths, spectrum = load_single_spectrum_file(
             file_path,
             skiprows
         )
-
-        # -----------------------------------------------------------
-        # Check wavelengths
-        # -----------------------------------------------------------
 
         if wavelengths is None:
 
@@ -626,65 +595,45 @@ def load_individual_spectra(
                 raise ValueError(
                     f"The wavelength values in "
                     f"'{file_path.name}' do not match "
-                    "the other spectra."
+                    f"the other spectra."
                 )
 
-        spectra.append(
-            spectrum
-        )
+        spectra.append(spectrum)
 
-        labels.append(
-            file_path.stem
-        )
+        # Filename stem = spectrum label
+        labels.append(file_path.stem)
 
     spectra = np.asarray(
-        spectra
+        spectra,
+        dtype=float
     )
-
-    # No x-values are assumed for separate files.
-
-    x_values = None
 
     return (
         wavelengths,
         spectra,
         labels,
-        x_values
+        condition
     )
 
 
-# -------------------------------------------------------------------
-# Main spectral-data loader
-# -------------------------------------------------------------------
+# =============================================================================
+# MAIN DATA LOADING FUNCTION
+# =============================================================================
 
 def load_spectral_data():
     """
-    Load fluorescence spectral data.
+    Load spectral data according to the user's selections.
 
-    Returns
-    -------
-    wavelengths : numpy.ndarray
-
-    spectra : numpy.ndarray
-
-    labels : list
-
-    x_values : numpy.ndarray or None
-
-    folder : pathlib.Path
+    Returns:
+        wavelengths
+        spectra
+        labels
+        condition
+        folder
     """
 
-    # ---------------------------------------------------------------
-    # Project and data directory
-    # ---------------------------------------------------------------
-
-    project_directory = (
-        Path(__file__).resolve().parent
-    )
-
-    data_directory = (
-        project_directory / "data"
-    )
+    project_directory = Path(__file__).resolve().parent
+    data_directory = project_directory / "data"
 
     if not data_directory.exists():
 
@@ -693,32 +642,20 @@ def load_spectral_data():
             f"{data_directory}"
         )
 
-    # ---------------------------------------------------------------
-    # Select folder
-    # ---------------------------------------------------------------
-
+    # Select data folder
     folder = select_data_folder(
         data_directory
     )
 
-    # ---------------------------------------------------------------
     # Select organization
-    # ---------------------------------------------------------------
-
     organization = select_data_organization()
 
-    # ---------------------------------------------------------------
-    # Select format
-    # ---------------------------------------------------------------
-
+    # Select file format
     file_extension = select_file_format()
-
-    # ---------------------------------------------------------------
-    # Select files
-    # ---------------------------------------------------------------
 
     if organization == 1:
 
+        # Multiple files, one spectrum per file
         file_paths = select_data_files(
             folder,
             file_extension
@@ -726,20 +663,18 @@ def load_spectral_data():
 
     else:
 
+        # Multiple spectra in one file
         file_path = select_data_file(
             folder,
             file_extension
         )
 
-    # ---------------------------------------------------------------
-    # Header rows
-    # ---------------------------------------------------------------
-
+    # Select number of header rows
     skiprows = select_header_rows()
 
-    # ---------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # One spectrum per file
-    # ---------------------------------------------------------------
+    # -------------------------------------------------------------------------
 
     if organization == 1:
 
@@ -747,15 +682,15 @@ def load_spectral_data():
             wavelengths,
             spectra,
             labels,
-            x_values
+            condition
         ) = load_individual_spectra(
             file_paths,
             skiprows
         )
 
-    # ---------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Multiple spectra in one file
-    # ---------------------------------------------------------------
+    # -------------------------------------------------------------------------
 
     else:
 
@@ -763,15 +698,15 @@ def load_spectral_data():
             wavelengths,
             spectra,
             labels,
-            x_values
+            condition
         ) = load_multiple_spectra_file(
             file_path,
             skiprows
         )
 
-    # ---------------------------------------------------------------
+    # -------------------------------------------------------------------------
     # Validation
-    # ---------------------------------------------------------------
+    # -------------------------------------------------------------------------
 
     if len(spectra) < 2:
 
@@ -791,21 +726,23 @@ def load_spectral_data():
         wavelengths,
         spectra,
         labels,
-        x_values,
+        condition,
         folder
     )
 
 
-# -------------------------------------------------------------------
-# Original loader
-# -------------------------------------------------------------------
+# =============================================================================
+# PUBLIC LOADING FUNCTIONS
+# =============================================================================
 
 def load_data():
     """
-    Load fluorescence spectral data.
+    Load spectral data.
 
-    This function preserves the original three-value return
-    structure used by phasor_plot.py.
+    Returns:
+        wavelengths
+        spectra
+        labels
     """
 
     (
@@ -823,13 +760,71 @@ def load_data():
     )
 
 
-# -------------------------------------------------------------------
-# Loader for thermodynamic analysis
-# -------------------------------------------------------------------
+def load_data_with_condition():
+    """
+    Load spectral data for spectral phasor plotting.
+
+    Returns:
+        wavelengths
+        spectra
+        labels
+        condition
+    """
+
+    (
+        wavelengths,
+        spectra,
+        labels,
+        condition,
+        _
+    ) = load_spectral_data()
+
+    return (
+        wavelengths,
+        spectra,
+        labels,
+        condition
+    )
+
 
 def load_data_with_x_values():
     """
-    Load fluorescence spectral data together with x-values.
+    Load spectral data for quantitative thermodynamic analysis.
+
+    Spectrum labels must be numerical because they are used as
+    experimental x-values.
+
+    The name of the selected data folder is returned as the
+    experimental variable name.
+
+    Returns:
+        wavelengths
+        spectra
+        labels
+        x_values
+        condition
     """
 
-    return load_spectral_data()
+    (
+        wavelengths,
+        spectra,
+        labels,
+        _,
+        folder
+    ) = load_spectral_data()
+
+    x_values = extract_x_values(
+        labels
+    )
+
+    # The selected folder name is used as the experimental
+    # variable name for thermodynamic analysis.
+    condition = folder.name
+
+    return (
+        wavelengths,
+        spectra,
+        labels,
+        x_values,
+        condition
+    )
