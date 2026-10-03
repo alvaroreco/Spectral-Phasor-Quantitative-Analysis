@@ -18,7 +18,8 @@ $$
 G_{\lambda} =
 \sum
 \left(
-\frac{I(\lambda)}{\sum I(\lambda)}
+\frac{I(\lambda)}
+{\sum I(\lambda)}
 \right)
 \cos
 \left[
@@ -32,7 +33,8 @@ $$
 S_{\lambda} =
 \sum
 \left(
-\frac{I(\lambda)}{\sum I(\lambda)}
+\frac{I(\lambda)}
+{\sum I(\lambda)}
 \right)
 \sin
 \left[
@@ -317,8 +319,7 @@ The user then selects the thermodynamic states defining the transitions.
 For each transition, the program calculates the relative spectral phasor distance:
 
 $$
-r(x)
-=
+r(x) =
 \frac{
 d_{\mathrm{initial},x}
 }{
@@ -331,8 +332,7 @@ where \(d\) represents the Euclidean distance between spectral phasor coordinate
 The relative distance is fitted using:
 
 $$
-r(x)
-=
+r(x) =
 \frac{
 I_{\mathrm{final}}
 }{
@@ -584,8 +584,7 @@ The package versions are explicitly specified in the environment configuration.
 
 If you use this repository or the associated analysis in your work, please cite:
 
-> Recoulat Angelini AA, Malacrida L, Gonzalez Flecha FL.
-> *Linear combination properties of spectral phasors allow thermodynamic analysis of reversible denaturation of multidomain and membrane proteins.*
+> Recoulat Angelini AA, Malacrida L, Gonzalez Flecha FL. *Linear combination properties of spectral phasors allow thermodynamic analysis of reversible denaturation of multidomain and membrane proteins.*
 
 ---
 
