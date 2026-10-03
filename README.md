@@ -1,97 +1,127 @@
 # Spectral-Phasor-Quantitative-Analysis
 
-Python code for transforming fluorescence emission spectra into spectral phasor coordinates and performing quantitative analysis of reversible protein denaturation.
+Python tools for spectral phasor analysis of fluorescence spectra, including visualization, phasor trajectories, and thermodynamic analysis of reversible transitions.
 
-This repository contains the code used for the analyses presented in:
+This repository contains the analysis code associated with:
 
-**Recoulat Angelini AA, Malacrida L, Gonzalez Flecha FL.**
-*Linear combination properties of spectral phasors allow thermodynamic analysis of reversible denaturation of multidomain and membrane proteins.*
+> Recoulat Angelini AA, Malacrida L, Gonzalez Flecha FL.
+> *Linear combination properties of spectral phasors allow thermodynamic analysis of reversible denaturation of multidomain and membrane proteins.*
 
 ---
 
 ## Overview
 
-Spectral phasor analysis provides a model-independent representation of fluorescence emission spectra. In this approach, each fluorescence spectrum is transformed into a pair of spectral phasor coordinates, \(G_{\lambda}\) and \(S_{\lambda}\).
+Spectral phasors provide a model-independent representation of fluorescence spectra.
 
-The code in this repository allows users to:
+For a fluorescence spectrum \(I(\lambda)\), the spectral phasor coordinates are calculated as:
 
-* read fluorescence spectral data from several common file formats;
-* calculate spectral phasor coordinates;
-* generate fluorescence emission spectra and spectral phasor plots;
-* visualize phasor trajectories during protein denaturation;
-* select thermodynamic states along a denaturation trajectory;
-* calculate relative phasor distances between selected states;
-* perform thermodynamic fitting of reversible denaturation transitions;
-* obtain estimates of \(\Delta G\) and the denaturant dependence parameter \(m\);
-* export numerical results and fitted curves for further analysis.
+$$
+G_{\lambda}
+=
+\sum
+\left(
+\frac{I(\lambda)}{\sum I(\lambda)}
+\right)
+\cos
+\left[
+2\pi
+\frac{\lambda-\lambda_{\min}}
+{\lambda_{\max}-\lambda_{\min}}
+\right]
+$$
 
-The implementation of the spectral phasor calculation follows the mathematical formulation used in the associated publication.
+$$
+S_{\lambda}
+=
+\sum
+\left(
+\frac{I(\lambda)}{\sum I(\lambda)}
+\right)
+\sin
+\left[
+2\pi
+\frac{\lambda-\lambda_{\min}}
+{\lambda_{\max}-\lambda_{\min}}
+\right]
+$$
+
+The repository provides two main analysis workflows:
+
+* **Spectral phasor analysis and visualization**
+* **Thermodynamic analysis of reversible transitions**
 
 ---
 
 ## Requirements
 
-The code was developed and tested using **Python 3.9.7** with the following package versions:
+The repository requires **Python 3.9.x**.
 
+The code was developed and tested with:
+
+* Python 3.9.7
 * NumPy 1.20.3
 * SciPy 1.7.1
 * Matplotlib 3.4.3
 * pandas 1.3.4
 
-Two installation options are provided.
+The exact dependency versions are provided in:
 
-### Option 1: Conda environment (recommended)
+* `requirements.txt`
+* `environment.yml`
 
-An `environment.yml` file is provided to create a complete environment with the required Python version, packages, and Tk support for graphical output.
+### Recommended installation
 
-If Anaconda or Miniconda is installed, create the environment from the repository directory:
+A dedicated Conda environment is recommended.
 
-```bash
+You do **not** need to replace or downgrade the Python installation on your computer. The Conda environment contains its own Python 3.9 installation and does not modify the system Python.
+
+From the repository directory, run:
+
+```powershell
 conda env create -f environment.yml
-```
-
-Activate the environment:
-
-```bash
 conda activate spectral-phasor
 ```
 
-The scripts can then be run directly:
+Verify the Python version:
 
-```bash
-python phasor_plot.py
+```powershell
+python --version
 ```
 
-or:
+It should report Python 3.9.x.
 
-```bash
-python phasor_thermodynamic_analysis.py
+You can also verify that the required packages are available:
+
+```powershell
+python -c "import numpy, scipy, matplotlib, pandas; print('Environment OK')"
 ```
 
-### Option 2: pip
+The expected output is:
 
-Alternatively, the required Python packages can be installed using:
-
-```bash
-pip install -r requirements.txt
+```text
+Environment OK
 ```
 
-The `requirements.txt` file specifies the package versions used for the analyses.
+### Alternative installation
+
+If Python 3.9.x is already installed and you are not using Conda, the dependencies can be installed with:
+
+```powershell
+python -m pip install -r requirements.txt
+```
+
+The Conda environment is recommended because the repository uses specific versions of the scientific Python packages.
 
 ---
 
 ## Input data
 
-The repository supports fluorescence spectra organized in two ways:
+The analysis scripts support two different ways of organizing spectral data:
 
 1. **One spectrum per file**
 2. **Multiple spectra in a single file**
 
-The user selects the data organization interactively when running the scripts.
-
-### Supported file formats
-
-The following input formats are supported:
+The following file formats are supported:
 
 * CSV (`.csv`)
 * Text (`.txt`)
@@ -99,9 +129,7 @@ The following input formats are supported:
 * Excel (`.xlsx`)
 * Excel (`.xls`)
 
-The input data should be placed inside the `data/` directory.
-
-Multiple subfolders can be used to organize different datasets or experimental conditions.
+Input data should be organized inside the `data/` directory. Multiple experimental datasets can be stored in different subfolders.
 
 For example:
 
@@ -109,42 +137,61 @@ For example:
 data/
 ├── Example 2 states/
 ├── Example 3 states/
-└── GuCl/
+└── Another dataset/
 ```
 
-The name of the selected data folder is used as the experimental variable name in the thermodynamic analysis.
+The user selects the appropriate data folder when the program starts.
+
+The selected folder name is also used as the name of the experimental variable in the thermodynamic analysis.
 
 ---
 
-## Multiple spectra in a single file
+## Data organization
 
-When several spectra are stored in one file, the first row after the specified header rows should contain the spectrum labels.
+### One spectrum per file
 
-The first column should contain the emission wavelengths, and the remaining columns should contain fluorescence intensity values.
+When one spectrum is stored per file, the **file name is used as the spectrum label**.
+
+For example, a dataset may be organized as:
+
+```text
+data/
+└── Dataset/
+    ├── spectrum_1.csv
+    ├── spectrum_2.csv
+    ├── spectrum_3.csv
+    └── spectrum_4.csv
+```
+
+Each file contains one fluorescence spectrum.
+
+The program uses the file name (without the file extension) as the spectrum identifier.
 
 For example:
 
 ```text
-Condition    0.000    0.150    0.300    0.375
-300.0        0.0902   0.0903   0.0925   0.0941
-301.0        0.1222   0.1224   0.1251   0.1267
-302.0        0.1351   0.1360   0.1382   0.1395
-...
+spectrum_1
+spectrum_2
+spectrum_3
+spectrum_4
 ```
 
-The first cell of the first data row identifies the type of experimental variable, while the remaining cells identify the individual spectra.
+For **spectral phasor plotting**, these labels are identifiers only and can be numerical or non-numerical.
 
-For thermodynamic analysis, these spectrum labels **must be numerical**, because they are used as the experimental \(x\)-values.
+For **thermodynamic analysis**, however, the labels must represent numerical values of the experimental variable. The program converts these labels to numerical values and sorts the spectra numerically before performing the analysis.
 
-Examples of valid labels:
+This prevents alphabetical file ordering from affecting the experimental sequence.
+
+For example, numerical labels such as:
 
 ```text
 0.000
 0.026
 0.051
 0.100
-0.250
 ```
+
+can be used for thermodynamic analysis.
 
 Labels such as:
 
@@ -152,53 +199,69 @@ Labels such as:
 A1
 A2
 Sample1
-x=0.150
 ```
 
-are not valid for thermodynamic analysis.
-
-The program will display an informative error message if non-numerical labels are encountered.
+cannot be used as thermodynamic experimental values.
 
 ---
 
-## One spectrum per file
+### Multiple spectra in a single file
 
-When one spectrum is stored per file, the file name is used as the spectrum label.
+When multiple spectra are stored in a single file, the file should contain the spectrum labels in the first row after the selected header rows.
+
+The first column contains the wavelength values.
+
+A generic structure is:
+
+```text
+Condition    Label_1    Label_2    Label_3
+300.0        0.102      0.115      0.128
+301.0        0.104      0.117      0.131
+302.0        0.107      0.119      0.134
+...
+```
+
+Here:
+
+* the first row identifies the individual spectra;
+* the first column contains the wavelength values;
+* the remaining columns contain the corresponding fluorescence intensities.
+
+For thermodynamic analysis, the spectrum labels must be numerical experimental values.
 
 For example:
 
 ```text
-data/
-└── GuCl/
-    ├── 0.000.csv
-    ├── 0.026.csv
-    ├── 0.051.csv
-    ├── 0.100.csv
-    └── 0.250.csv
+Condition    0.000    0.026    0.051    0.100
 ```
 
-For thermodynamic analysis, the file names must therefore represent numerical experimental values.
+is valid for thermodynamic analysis.
 
-The program sorts the spectra numerically according to these values before performing the thermodynamic analysis.
-
-This prevents alphabetical file ordering from affecting the experimental sequence.
+The program uses the selected data folder as the experimental variable name rather than the first cell of the data table.
 
 ---
 
 ## Interactive data selection
 
-The scripts guide the user through the data-loading process.
+The programs guide the user through the data selection process.
 
-The workflow includes:
+The workflow is:
 
-1. selecting the data folder;
-2. selecting the input file format;
-3. selecting the data organization;
-4. selecting individual files or all files;
-5. specifying the number of header rows to skip;
-6. loading the spectra.
+1. **Select the data folder**
+2. **Select the input file format**
+3. **Select the data organization**
 
-The user can select all files or specific files using file numbers or ranges.
+   * One spectrum per file
+   * Multiple spectra in a single file
+4. **Select the files to analyze**
+5. **Select the number of header rows to skip**
+
+When multiple files are available, the program allows the user to select:
+
+* all files by pressing `Enter`;
+* individual files by their index;
+* ranges of files;
+* combinations of individual files and ranges.
 
 For example:
 
@@ -206,131 +269,89 @@ For example:
 1-4
 ```
 
-or:
+selects files 1 through 4, while:
 
 ```text
 1,3,5
 ```
 
+selects files 1, 3, and 5.
+
 ---
 
-# Spectral phasor analysis
+## Spectral phasor analysis
 
-The script
+The script:
 
 ```text
 phasor_plot.py
 ```
 
-performs the basic spectral phasor analysis.
+performs the following steps:
 
-Run the script from the repository directory:
+1. Loads the selected fluorescence spectra.
+2. Calculates \(G_{\lambda}\) and \(S_{\lambda}\).
+3. Plots the fluorescence spectra.
+4. Generates the spectral phasor plot.
+5. Displays the phasor trajectory.
+6. Optionally exports the phasor coordinates.
+7. Optionally saves the generated figures.
 
-```bash
-python phasor_plot.py
-```
-
-The script:
-
-1. loads the fluorescence spectra;
-2. calculates the spectral phasor coordinates \(G_{\lambda}\) and \(S_{\lambda}\);
-3. generates the fluorescence emission spectra;
-4. generates the spectral phasor plot;
-5. displays the phasor trajectory;
-6. optionally saves the numerical phasor data;
-7. optionally saves the generated figures.
-
-### Spectrum labels
-
-For `phasor_plot.py`, spectrum labels are used only as identifiers.
-
-Therefore, they do **not** need to be numerical.
-
-For example, the following labels are valid:
-
-```text
-A1
-A2
-A3
-Control
-Sample 1
-Sample 2
-```
+The spectrum labels are used only as identifiers in this workflow and therefore do not need to be numerical.
 
 ---
 
-# Thermodynamic analysis
+## Thermodynamic analysis
 
-The script
+The script:
 
 ```text
 phasor_thermodynamic_analysis.py
 ```
 
-extends the spectral phasor analysis to the quantitative analysis of reversible protein denaturation.
+extends the spectral phasor analysis to reversible thermodynamic transitions.
 
-Run the analysis with:
+For this analysis, the experimental values associated with the spectra must be numerical.
 
-```bash
-python phasor_thermodynamic_analysis.py
-```
+The spectra are first sorted according to the numerical value of the experimental variable.
 
-The workflow includes:
+The user then selects the thermodynamic states defining the transitions.
 
-1. loading the fluorescence spectra and experimental \(x\)-values;
-2. sorting the spectra according to increasing experimental \(x\);
-3. calculating spectral phasor coordinates;
-4. selecting the thermodynamic states along the phasor trajectory;
-5. calculating the relative distance of each experimental phasor between the selected initial and final states;
-6. fitting the relative-distance data to a thermodynamic model of reversible denaturation;
-7. obtaining estimates of \(\Delta G\) and \(m\);
-8. generating thermodynamic fitting plots;
-9. optionally exporting all numerical results.
-
----
-
-## Thermodynamic states
-
-The first and last spectra are automatically selected as thermodynamic states.
-
-The user can optionally select intermediate states by entering their spectrum numbers.
-
-For example:
-
-```text
-Intermediate states: 4,7
-```
-
-The states must be entered in increasing order.
-
-The program then analyzes each transition between consecutive selected states:
-
-```text
-State 1 ↔ State 2
-State 2 ↔ State 3
-State 3 ↔ State 4
-```
-
-This allows multi-state denaturation trajectories to be analyzed as a series of thermodynamic transitions.
-
----
-
-## Thermodynamic model
-
-The relative phasor distance is fitted using the thermodynamic model:
+For each transition, the program calculates the relative spectral phasor distance:
 
 $$
-r(x)=
-\frac{I_{\mathrm{final}}}
-{I_{\mathrm{final}}+
+r(x)
+=
+\frac{
+d_{\mathrm{initial},x}
+}{
+d_{\mathrm{initial},\mathrm{final}}
+}
+$$
+
+where \(d\) represents the Euclidean distance between spectral phasor coordinates.
+
+The relative distance is fitted using:
+
+$$
+r(x)
+=
+\frac{
+I_{\mathrm{final}}
+}{
+I_{\mathrm{final}}
++
 I_{\mathrm{initial}}
-\exp\left[
+\exp
+\left[
 \frac{\Delta G-mx}{RT}
-\right]}
+\right]
+}
 $$
 
 where:
 
+* \(G_{\lambda}\) and \(S_{\lambda}\) are the spectral phasor coordinates;
 * \(r(x)\) is the relative spectral phasor distance;
 * \(I_{\mathrm{initial}}\) is the integrated fluorescence of the initial state;
 * \(I_{\mathrm{final}}\) is the integrated fluorescence of the final state;
@@ -340,151 +361,148 @@ where:
 * \(T\) is the absolute temperature;
 * \(x\) is the experimental variable.
 
-The initial and final fluorescence values are obtained by numerical integration of the corresponding spectra.
+The fit provides estimates of:
+
+* \(\Delta G\)
+* the standard error of \(\Delta G\)
+* \(m\)
+* the standard error of \(m\)
+
+---
+
+## Thermodynamic state selection
+
+The initial and final states are selected automatically as the first and last spectra.
+
+Intermediate states can be selected by entering their spectrum numbers.
+
+The selected states must:
+
+* correspond to different spectra;
+* be entered in increasing experimental order;
+* define valid transitions containing sufficient experimental points.
+
+For a transition between two selected states, the spectra between the initial and final states are used as experimental points for the thermodynamic fit.
 
 ---
 
 ## Temperature and energy units
 
-The program interactively requests the temperature in Kelvin.
+The thermodynamic analysis allows the user to specify:
+
+* temperature in Kelvin;
+* energy units.
 
 The available energy units are:
 
-```text
-1 - J/mol
-2 - kJ/mol
-3 - cal/mol
-4 - kcal/mol
-```
+* J/mol
+* kJ/mol
+* cal/mol
+* kcal/mol
 
-The corresponding gas constants are automatically assigned.
+The corresponding gas constants are handled internally by the program.
 
 ---
 
-## Error handling
+## Output
 
-The thermodynamic analysis includes checks for common input and fitting problems.
-
-Informative error messages are provided for situations including:
-
-* invalid or missing experimental \(x\)-values;
-* non-numerical thermodynamic labels;
-* fewer than two spectra;
-* inconsistent numbers of spectra, labels, or \(x\)-values;
-* invalid temperature;
-* invalid energy-unit selection;
-* repeated experimental \(x\)-values within a transition;
-* insufficient experimental points for a thermodynamic fit;
-* identical initial and final phasor coordinates;
-* non-finite phasor coordinates;
-* invalid integrated fluorescence values;
-* failure of the thermodynamic fit to converge;
-* problems writing output files.
-
-The program reports the relevant error without changing the underlying mathematical analysis.
-
----
-
-# Output
-
-All generated files are stored in the:
+All generated files are stored in:
 
 ```text
 output/
 ```
 
-directory.
+The program does not require the user to save data or figures. Saving is optional.
 
-The spectral phasor analysis can generate:
+### Spectral phasor output
 
-* fluorescence spectra figures;
-* spectral phasor figures;
-* numerical \(G\) and \(S\) data.
+When phasor data are exported, the output contains:
 
-The thermodynamic analysis can generate:
+```text
+condition    G    S
+```
 
-* fluorescence spectra figures;
-* spectral phasor figures;
-* one thermodynamic fitting figure for each transition;
-* a human-readable summary of the complete analysis;
-* a table of spectral phasor coordinates;
-* experimental relative-distance data;
-* smooth fitted curves;
-* fitted \(\Delta G\) and \(m\) values with their estimated standard errors.
+followed by the spectrum labels and their corresponding phasor coordinates.
 
----
+For example:
 
-## Thermodynamic analysis export files
+```text
+0.000    0.1234    0.4567
+0.026    0.1251    0.4582
+0.051    0.1280    0.4610
+```
 
-When the user selects the option to export all analysis data, the following files are generated.
+No redundant numerical index is added to the output.
 
-### Summary
+### Thermodynamic analysis output
+
+The thermodynamic analysis can export:
+
+* a human-readable summary;
+* the complete phasor data;
+* relative phasor distance data for each transition;
+* smooth fitted curves for each transition.
+
+Typical output files are:
 
 ```text
 <name>_summary.txt
+<name>_phasor.txt
+<name>_transition_1_rd_vs_x.txt
+<name>_transition_1_fit.txt
 ```
 
-Contains:
+Additional transition files are generated when more than one transition is analyzed.
+
+The summary contains:
 
 * selected data folder;
 * experimental variable;
 * temperature;
-* gas constant;
 * energy units;
 * loaded spectra;
-* spectrum labels;
-* experimental \(x\)-values;
 * selected thermodynamic states;
 * spectral phasor coordinates;
-* integrated initial and final fluorescence;
-* initial fitting parameters;
-* fitted \(\Delta G\);
-* fitted \(m\);
-* estimated standard errors;
-* final compact results table.
-
-### Phasor data
-
-```text
-<name>_phasor.txt
-```
-
-Contains:
-
-```text
-condition    G    S
-x1           ...  ...
-x2           ...  ...
-x3           ...  ...
-```
-
-### Experimental relative-distance data
-
-For each transition:
-
-```text
-<name>_transition_1_rd_vs_x.txt
-<name>_transition_2_rd_vs_x.txt
-...
-```
-
-These files contain the experimental \(x\)-values and relative phasor distances.
-
-### Fitted curves
-
-For each transition:
-
-```text
-<name>_transition_1_fit.txt
-<name>_transition_2_fit.txt
-...
-```
-
-These files contain the \(x\)-values used to generate the smooth thermodynamic fit and the corresponding fitted relative distances.
+* fitted thermodynamic parameters;
+* final transition results.
 
 ---
 
-# Repository structure
+## Figures
+
+The programs can optionally save the generated figures in the `output/` directory.
+
+Depending on the analysis, these may include:
+
+* fluorescence spectra;
+* spectral phasor plots;
+* phasor trajectories;
+* thermodynamic transition plots.
+
+Figures are saved as PNG files at 300 dpi.
+
+---
+
+## Error handling
+
+The thermodynamic analysis includes user-oriented error messages for common problems, including:
+
+* incorrect data folder or files;
+* incompatible file format;
+* incorrect number of header rows;
+* non-numerical thermodynamic labels;
+* insufficient spectra;
+* invalid thermodynamic state selection;
+* insufficient experimental points;
+* invalid temperature or energy-unit settings;
+* unsuccessful thermodynamic fitting;
+* output-directory errors.
+
+Technical error information is also displayed to facilitate troubleshooting.
+
+---
+
+## Repository structure
 
 ```text
 Spectral-Phasor-Quantitative-Analysis/
@@ -493,118 +511,88 @@ Spectral-Phasor-Quantitative-Analysis/
 ├── requirements.txt
 ├── environment.yml
 │
+├── data/
+│   ├── Example 2 states/
+│   └── Example 3 states/
+│
+├── output/
+│
 ├── data_reader.py
 ├── phasor_functions.py
 ├── phasor_plot.py
-├── phasor_thermodynamic_analysis.py
-│
-├── data/
-│   ├── Example 2 states/
-│   ├── Example 3 states/
-│   └── ...
-│
-└── output/
+└── phasor_thermodynamic_analysis.py
 ```
 
----
+### Main modules
 
-## Main modules
+#### `data_reader.py`
 
-### `data_reader.py`
+Handles:
 
-Functions for:
+* data-folder selection;
+* file-format selection;
+* file selection;
+* header-row selection;
+* CSV, TXT, DAT, XLSX, and XLS input;
+* one-spectrum-per-file datasets;
+* multiple-spectra-per-file datasets;
+* extraction and validation of numerical experimental values.
 
-* selecting the data folder;
-* selecting the input file format;
-* selecting files;
-* reading CSV, TXT, DAT, XLSX, and XLS files;
-* handling header rows;
-* loading one or multiple spectra;
-* extracting spectrum labels;
-* converting thermodynamic spectrum labels into numerical experimental \(x\)-values.
+#### `phasor_functions.py`
 
-For thermodynamic analysis, labels are required to be numerical.
+Contains the core spectral phasor calculations and plotting functions, including:
 
----
+* \(G_{\lambda}\)
+* \(S_{\lambda}\)
+* phasor magnitude;
+* phasor angle;
+* spectra plotting;
+* phasor plotting;
+* phasor trajectories;
+* state connections;
+* figure saving.
 
-### `phasor_functions.py`
+#### `phasor_plot.py`
 
-Functions for:
+Runs the spectral phasor visualization workflow.
 
-* calculating spectral phasor coordinates;
-* generating fluorescence spectra plots;
-* generating spectral phasor plots;
-* plotting phasor trajectories;
-* plotting connections between selected thermodynamic states;
-* saving figures.
+#### `phasor_thermodynamic_analysis.py`
 
----
+Runs the thermodynamic analysis workflow, including:
 
-### `phasor_plot.py`
-
-Main script for basic spectral phasor analysis.
-
-It calculates and displays:
-
-* fluorescence emission spectra;
-* spectral phasor coordinates;
-* spectral phasor trajectories.
-
-Spectrum labels are treated only as identifiers in this analysis.
-
----
-
-### `phasor_thermodynamic_analysis.py`
-
-Main script for quantitative thermodynamic analysis using spectral phasor trajectories.
-
-It performs:
-
-* numerical sorting of spectra according to experimental \(x\);
+* numerical ordering of spectra;
 * thermodynamic state selection;
-* relative phasor-distance calculations;
+* relative phasor distance calculation;
 * thermodynamic fitting;
-* estimation of \(\Delta G\) and \(m\);
-* generation of thermodynamic fitting plots;
-* export of numerical analysis results.
+* parameter estimation;
+* data export;
+* figure generation.
 
 ---
 
-# Reproducibility
+## Reproducibility
 
-The repository contains the Python implementation used for the analyses reported in the associated publication.
+For reproducible analysis, use the Conda environment provided with the repository:
 
-The mathematical implementation of the spectral phasor coordinates and thermodynamic analysis is kept consistent with the analysis described in the publication.
-
-The Python version and package versions used for the analyses are specified in both:
-
-```text
-requirements.txt
+```powershell
+conda env create -f environment.yml
+conda activate spectral-phasor
 ```
 
-and:
-
-```text
-environment.yml
-```
-
-to facilitate reproducibility across different systems.
+The package versions are explicitly specified in the environment configuration.
 
 ---
 
-# Citation
+## Citation
 
-If you use this code in your research, please cite the associated publication:
+If you use this repository or the associated analysis in your work, please cite:
 
-**Recoulat Angelini AA, Malacrida L, Gonzalez Flecha FL.**
-
-*Linear combination properties of spectral phasors allow thermodynamic analysis of reversible denaturation of multidomain and membrane proteins.*
+> Recoulat Angelini AA, Malacrida L, Gonzalez Flecha FL.
+> *Linear combination properties of spectral phasors allow thermodynamic analysis of reversible denaturation of multidomain and membrane proteins.*
 
 ---
 
-# Contact
-
-For questions regarding the code, implementation, or reproducibility of the analyses, please contact:
+## Contact
 
 **Alvaro A. Recoulat Angelini**
 Universidad de Buenos Aires
