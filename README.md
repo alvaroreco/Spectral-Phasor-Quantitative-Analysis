@@ -46,37 +46,6 @@ $$
 L = \lambda_{\max} - \lambda_{\min}
 $$
 
-Thus, the implementation is equivalent to calculating:
-
-$$
-G_{\lambda} =
-\sum_{\lambda}
-\left(
-\frac{F(\lambda)}
-{\sum_{\lambda}F(\lambda)}
-\right)
-\cos\left[
-2\pi
-\frac{\lambda-\lambda_{\min}}
-{\lambda_{\max}-\lambda_{\min}}
-\right]
-$$
-
-and:
-
-$$
-S_{\lambda} =
-\sum_{\lambda}
-\left(
-\frac{F(\lambda)}
-{\sum_{\lambda}F(\lambda)}
-\right)
-\sin\left[
-2\pi
-\frac{\lambda-\lambda_{\min}}
-{\lambda_{\max}-\lambda_{\min}}
-\right]
-$$
 
 The repository provides two main analysis workflows:
 
