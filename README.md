@@ -404,7 +404,7 @@ Runs the thermodynamic analysis workflow, including:
 
 For reproducible analysis, use the Conda environment provided with the repository:
 
-```powershell
+```text
 conda env create -f environment.yml
 conda activate spectral-phasor
 ```
