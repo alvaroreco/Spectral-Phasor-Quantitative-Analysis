@@ -333,16 +333,94 @@ Runs the thermodynamic analysis workflow, including:
 
 ---
 
-## Reproducibility
+## Running the analysis
 
-For reproducible analysis, use the Conda environment provided with the repository:
+The recommended way to run the programs is to use the Conda environment provided with the repository. This keeps the required Python version and package versions isolated from the system Python installation.
 
-```text
+### Using Conda
+
+Open **Anaconda Prompt** or **PowerShell** with Conda available and navigate to the repository folder:
+
+```powershell
+cd path\to\Spectral-Phasor-Quantitative-Analysis
+```
+
+Create the environment:
+
+```powershell
 conda env create -f environment.yml
+```
+
+Activate the environment:
+
+```powershell
 conda activate spectral-phasor
 ```
 
-The package versions are explicitly specified in the environment configuration.
+Verify the Python version:
+
+```powershell
+python --version
+```
+
+The repository was developed and tested with Python 3.9.x.
+
+The required packages can be checked with:
+
+```powershell
+python -c "import numpy, scipy, matplotlib, pandas; print('Environment OK')"
+```
+
+Then run the desired analysis:
+
+```powershell
+python phasor_plot.py
+```
+
+or:
+
+```powershell
+python phasor_thermodynamic_analysis.py
+```
+
+### Using an existing Python 3.9 installation
+
+If Python 3.9.x is already installed, the required packages can alternatively be installed with:
+
+```powershell
+python -m pip install -r requirements.txt
+```
+
+Then run the scripts with:
+
+```powershell
+python phasor_plot.py
+```
+
+or:
+
+```powershell
+python phasor_thermodynamic_analysis.py
+```
+
+Python 3.12 or newer is not recommended for this repository because the pinned package versions were selected for the Python 3.9 environment used during development.
+
+### PowerShell execution
+
+If PowerShell does not recognize `conda`, initialize Conda for PowerShell from an Anaconda Prompt:
+
+```powershell
+conda init powershell
+```
+
+Then restart PowerShell and activate the environment:
+
+```powershell
+conda activate spectral-phasor
+```
+
+The system Python installation does not need to be modified or replaced.
+
 
 ---
 
