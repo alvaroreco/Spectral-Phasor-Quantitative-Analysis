@@ -61,7 +61,7 @@ $$
 and
 
 $$
-L = \lambda_{\max} - \lambda_{\min}.
+L = \lambda_{\max} - \lambda_{\min}
 $$
 
 Thus, the implementation is equivalent to calculating:
@@ -97,7 +97,7 @@ S_{\lambda}
 2\pi
 \frac{\lambda-\lambda_{\min}}
 {\lambda_{\max}-\lambda_{\min}}
-\right].
+\right]
 $$
 
 The repository provides two main analysis workflows:
@@ -197,7 +197,6 @@ The fit provides estimates of:
 * the standard error of \(\Delta G\);
 * \(m\);
 * the standard error of \(m\).
-
 
 ---
 
@@ -373,8 +372,8 @@ Handles:
 
 Contains the core spectral phasor calculations and plotting functions, including:
 
-* \(G_{\lambda}\)
-* \(S_{\lambda}\)
+* \(G_{\lambda}\);
+* \(S_{\lambda}\);
 * phasor magnitude;
 * phasor angle;
 * spectra plotting;
@@ -425,6 +424,7 @@ If you use this repository or the associated analysis in your work, please cite:
 ## Contact
 
 **Alvaro A. Recoulat Angelini**
+
 Universidad de Buenos Aires
 Facultad de Farmacia y Bioquímica
 
