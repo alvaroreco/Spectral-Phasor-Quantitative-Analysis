@@ -34,18 +34,6 @@ $L$ is the scale parameter that determines the periodicity of the cosine and sin
 the numerator calculates the intensity-weighted sum of the corresponding trigonometric function;
 the denominator normalizes the result by the total fluorescence intensity.
 
-In the implementation used in this repository, the wavelength range is defined by the measured spectrum:
-
-$$
-\lambda_0 = \lambda_{\min}
-$$
-
-and
-
-$$
-L = \lambda_{\max} - \lambda_{\min}
-$$
-
 
 The repository provides two main analysis workflows:
 
