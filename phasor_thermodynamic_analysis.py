@@ -14,10 +14,13 @@ This script:
     - Calculates relative spectral phasor distances between
       consecutive thermodynamic states.
     - Performs thermodynamic fitting of each transition.
-    - Uses the selected data-folder name as the experimental
-      variable name on the x-axis.
+    - Uses the experimental variable name supplied by data_reader
+      as the x-axis label.
     - Optionally saves figures in the 'output' directory.
-    - Optionally exports all analysis data and results.
+    - Figures displayed on screen have titles.
+    - Saved figures do not have titles.
+    - Optionally exports analysis data and thermodynamic results.
+    - Does not export smooth fitted curves as separate files.
 
 The thermodynamic model is:
 
@@ -97,8 +100,7 @@ def main():
         create_spectra_plot,
         create_phasor_plot,
         plot_phasor_trajectory,
-        plot_state_connections,
-        save_figures
+        plot_state_connections
     )
 
 
@@ -537,6 +539,65 @@ def main():
 
 
     # ============================================================
+    # SAVE FIGURE WITHOUT TITLE
+    # ============================================================
+
+    def save_figure_without_title(
+        figure,
+        axis,
+        output_file,
+        figure_format
+    ):
+        """
+        Save a figure without its title.
+
+        The current title is temporarily removed before saving
+        and restored immediately afterwards.
+        """
+
+        current_title = axis.get_title()
+
+        # Remove title only for the saved file
+        axis.set_title("")
+
+        try:
+
+            if figure_format == "png":
+
+                figure.savefig(
+                    output_file,
+                    format="png",
+                    dpi=300,
+                    bbox_inches="tight"
+                )
+
+            elif figure_format == "tiff":
+
+                figure.savefig(
+                    output_file,
+                    format="tiff",
+                    dpi=300,
+                    bbox_inches="tight",
+                    pil_kwargs={
+                        "compression": "tiff_lzw"
+                    }
+                )
+
+            else:
+
+                raise ValueError(
+                    "Unsupported figure format."
+                )
+
+        finally:
+
+            # Restore title for the displayed figure
+            axis.set_title(
+                current_title
+            )
+
+
+    # ============================================================
     # SORT DATA BY EXPERIMENTAL X-VALUE
     # ============================================================
 
@@ -754,12 +815,6 @@ def main():
 
         # --------------------------------------------------------
         # Initial guesses according to energy units
-        #
-        # Original values:
-        # J/mol  -> [10000, 20000]
-        # kJ/mol -> [10, 20]
-        # cal/mol -> [2390, 4780]
-        # kcal/mol -> [2.39, 4.78]
         # --------------------------------------------------------
 
         if np.isclose(
@@ -898,6 +953,9 @@ def main():
 
         # --------------------------------------------------------
         # Smooth fitted curve
+        #
+        # Kept in memory for plotting.
+        # It is NOT exported as a separate file.
         # --------------------------------------------------------
 
         x_fit = np.linspace(
@@ -962,7 +1020,7 @@ def main():
 
 
     # ============================================================
-    # EXPORT ALL ANALYSIS DATA
+    # EXPORT ANALYSIS DATA
     # ============================================================
 
     def export_all_analysis_data(
@@ -980,14 +1038,15 @@ def main():
         energy_unit
     ):
         """
-        Export all numerical results from the thermodynamic analysis.
+        Export numerical results from the thermodynamic analysis.
 
         The following files are generated:
 
             1. A human-readable summary text file.
             2. A phasor data text file.
             3. One experimental rd-vs-x text file per transition.
-            4. One smooth fitted-curve text file per transition.
+
+        Smooth fitted curves are intentionally NOT exported.
         """
 
         output_directory.mkdir(
@@ -1021,10 +1080,6 @@ def main():
 
             file.write(
                 "============================================================\n\n"
-            )
-
-            file.write(
-                f"Data folder:\n{condition}\n\n"
             )
 
             file.write(
@@ -1455,41 +1510,6 @@ def main():
                 rd_file
             )
 
-            # ----------------------------------------------------
-            # Smooth fitted curve
-            # ----------------------------------------------------
-
-            fit_file = (
-                output_directory
-                /
-                f"{base_name}_transition_"
-                f"{transition_number}_fit.txt"
-            )
-
-            with open(
-                fit_file,
-                "w",
-                encoding="utf-8"
-            ) as file:
-
-                file.write(
-                    f"{condition}\trd_fitted\n"
-                )
-
-                for x_value, y_value in zip(
-                    result['x_fit'],
-                    result['y_fit']
-                ):
-
-                    file.write(
-                        f"{x_value:.10g}\t"
-                        f"{y_value:.10g}\n"
-                    )
-
-            transition_files.append(
-                fit_file
-            )
-
         # ========================================================
         # PRINT EXPORTED FILES
         # ========================================================
@@ -1734,6 +1754,11 @@ def main():
         labels=labels
     )
 
+    ax_spectra.set_title(
+        "Fluorescence spectra",
+        fontsize=18
+    )
+
     fig_spectra.tight_layout()
 
 
@@ -1765,6 +1790,11 @@ def main():
         G_values,
         S_values,
         state_indices
+    )
+
+    ax_phasor.set_title(
+        "Spectral phasor plot",
+        fontsize=18
     )
 
     fig_phasor.tight_layout()
@@ -1851,6 +1881,7 @@ def main():
     # ============================================================
 
     thermodynamic_figures = []
+    thermodynamic_axes = []
 
 
     for result in transition_results:
@@ -1889,6 +1920,10 @@ def main():
             linewidth=2.5
         )
 
+        # --------------------------------------------------------
+        # Title shown on screen
+        # --------------------------------------------------------
+
         ax.set_title(
             f"State "
             f"{result['transition_number']} ↔ "
@@ -1904,6 +1939,10 @@ def main():
 
         thermodynamic_figures.append(
             fig
+        )
+
+        thermodynamic_axes.append(
+            ax
         )
 
 
@@ -2062,6 +2101,7 @@ def main():
     # SHOW FIGURES
     # ============================================================
 
+    # Figures are displayed WITH their titles.
     plt.show(
         block=False
     )
@@ -2097,6 +2137,41 @@ def main():
             )
 
         # --------------------------------------------------------
+        # Select figure format
+        # --------------------------------------------------------
+
+        print(
+            "\nSelect figure format:"
+        )
+
+        print(
+            "1 - PNG"
+        )
+
+        print(
+            "2 - TIFF (LZW compressed)"
+        )
+
+        figure_format_choice = input(
+            "\nChoice: "
+        ).strip()
+
+        if figure_format_choice == "1":
+
+            figure_format = "png"
+
+        elif figure_format_choice == "2":
+
+            figure_format = "tiff"
+
+        else:
+
+            raise ValueError(
+                "Invalid figure-format choice.\n"
+                "Please select 1 or 2."
+            )
+
+        # --------------------------------------------------------
         # Output directory
         # --------------------------------------------------------
 
@@ -2112,23 +2187,49 @@ def main():
         )
 
         # --------------------------------------------------------
-        # Spectra + phasor
+        # Save spectra WITHOUT title
         # --------------------------------------------------------
 
-        save_figures(
+        spectra_file = (
+            output_directory
+            /
+            f"{base_name}_spectra.{figure_format}"
+        )
+
+        save_figure_without_title(
             fig_spectra,
-            fig_phasor,
-            output_directory,
-            base_name=base_name
+            ax_spectra,
+            spectra_file,
+            figure_format
         )
 
         # --------------------------------------------------------
-        # Thermodynamic transitions
+        # Save phasor WITHOUT title
         # --------------------------------------------------------
 
-        for result, fig in zip(
+        phasor_file = (
+            output_directory
+            /
+            f"{base_name}_phasor.{figure_format}"
+        )
+
+        save_figure_without_title(
+            fig_phasor,
+            ax_phasor,
+            phasor_file,
+            figure_format
+        )
+
+        # --------------------------------------------------------
+        # Save thermodynamic figures WITHOUT title
+        # --------------------------------------------------------
+
+        transition_files = []
+
+        for result, fig, ax in zip(
             transition_results,
-            thermodynamic_figures
+            thermodynamic_figures,
+            thermodynamic_axes
         ):
 
             transition_number = (
@@ -2137,19 +2238,42 @@ def main():
                 ]
             )
 
-            fig.savefig(
+            transition_file = (
                 output_directory
                 /
-                f'{base_name}_transition_'
-                f'{transition_number}.png',
-                dpi=300,
-                bbox_inches='tight'
+                f"{base_name}_transition_"
+                f"{transition_number}."
+                f"{figure_format}"
+            )
+
+            save_figure_without_title(
+                fig,
+                ax,
+                transition_file,
+                figure_format
+            )
+
+            transition_files.append(
+                transition_file
             )
 
         print(
-            "\nFigures saved in the 'output' folder "
-            f"with base name '{base_name}'."
+            "\nFigures saved in the 'output' folder:"
         )
+
+        print(
+            f"  {spectra_file.name}"
+        )
+
+        print(
+            f"  {phasor_file.name}"
+        )
+
+        for file_path in transition_files:
+
+            print(
+                f"  {file_path.name}"
+            )
 
 
     elif save == 'n':
@@ -2212,7 +2336,7 @@ def main():
             )
 
         # --------------------------------------------------------
-        # Export everything
+        # Export analysis data
         # --------------------------------------------------------
 
         export_all_analysis_data(

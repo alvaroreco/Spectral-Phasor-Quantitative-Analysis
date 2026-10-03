@@ -12,17 +12,19 @@ Two data organizations are supported:
 
 1. One spectrum per file
    The filename is used as the spectrum label.
-   For example:
-       A1.txt
-       A2.txt
-       Control.txt
+
+   The selected data folder name is used as the
+   experimental variable name (condition).
 
 2. Multiple spectra in one file
    The first row contains:
        condition | spectrum_label_1 | spectrum_label_2 | ...
 
-   The first column contains wavelengths and the remaining columns
-   contain the corresponding spectra.
+   The first cell of the first row is used as the
+   experimental variable name.
+
+   The first column contains wavelengths and the remaining
+   columns contain the corresponding spectra.
 
 For thermodynamic analysis, spectrum labels must be numerical.
 For example:
@@ -35,7 +37,6 @@ structure for compatibility.
 """
 
 from pathlib import Path
-import re
 
 import numpy as np
 import pandas as pd
@@ -423,7 +424,9 @@ def load_multiple_spectra_file(file_path, skiprows):
         wavelength   intensity  intensity  intensity
         ...
 
-    The first cell of the first row is the experimental condition.
+    The first cell of the first row is the experimental
+    variable name.
+
     The remaining cells of the first row are the spectrum labels.
     """
 
@@ -553,12 +556,13 @@ def load_individual_spectra(file_paths, skiprows):
 
     The filename stem is used as the spectrum label.
 
-    Examples:
-        A1.txt  -> A1
-        A2.txt  -> A2
-        Control.txt -> Control
+    The parent folder name is used as the experimental
+    variable name (condition).
 
-    No numerical x-value is required at this stage.
+    Examples:
+        A1.txt       -> A1
+        A2.txt       -> A2
+        Control.txt -> Control
     """
 
     wavelengths = None
@@ -572,6 +576,8 @@ def load_individual_spectra(file_paths, skiprows):
         key=lambda path: path.stem.lower()
     )
 
+    # For one-spectrum-per-file data, the folder name
+    # is the experimental variable name.
     condition = file_paths[0].parent.name
 
     for file_path in file_paths:
@@ -794,8 +800,14 @@ def load_data_with_x_values():
     Spectrum labels must be numerical because they are used as
     experimental x-values.
 
-    The name of the selected data folder is returned as the
-    experimental variable name.
+    The experimental variable name is determined by the data
+    organization:
+
+        One spectrum per file:
+            selected folder name.
+
+        Multiple spectra in one file:
+            first cell of the first row of the file.
 
     Returns:
         wavelengths
@@ -809,17 +821,28 @@ def load_data_with_x_values():
         wavelengths,
         spectra,
         labels,
-        _,
-        folder
+        condition,
+        _
     ) = load_spectral_data()
 
     x_values = extract_x_values(
         labels
     )
 
-    # The selected folder name is used as the experimental
-    # variable name for thermodynamic analysis.
-    condition = folder.name
+    # IMPORTANT:
+    # Keep the condition returned by load_spectral_data().
+    #
+    # One spectrum per file:
+    #     condition = selected folder name
+    #
+    # Multiple spectra in one file:
+    #     condition = first row, first column
+    #
+    # For example:
+    #     [Denaturant],0.000,0.150,0.300,...
+    #
+    # gives:
+    #     condition = "[Denaturant]"
 
     return (
         wavelengths,
