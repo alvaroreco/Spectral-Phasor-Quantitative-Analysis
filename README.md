@@ -4,8 +4,7 @@ Python tools for spectral phasor analysis of fluorescence spectra, including vis
 
 This repository contains the analysis code associated with:
 
-> Recoulat Angelini AA, Malacrida L, Gonzalez Flecha FL.
-> *Linear combination properties of spectral phasors allow thermodynamic analysis of reversible denaturation of multidomain and membrane proteins.*
+> Recoulat Angelini AA, Malacrida L, Gonzalez Flecha FL. *Linear combination properties of spectral phasors allow thermodynamic analysis of reversible denaturation of multidomain and membrane proteins.*
 
 ---
 
@@ -16,8 +15,7 @@ Spectral phasors provide a model-independent representation of fluorescence spec
 For a fluorescence spectrum \(I(\lambda)\), the spectral phasor coordinates are calculated as:
 
 $$
-G_{\lambda}
-=
+G_{\lambda} =
 \sum
 \left(
 \frac{I(\lambda)}{\sum I(\lambda)}
@@ -31,8 +29,7 @@ G_{\lambda}
 $$
 
 $$
-S_{\lambda}
-=
+S_{\lambda} =
 \sum
 \left(
 \frac{I(\lambda)}{\sum I(\lambda)}
