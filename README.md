@@ -52,7 +52,7 @@ The recommended way to run the programs is to use the Conda environment provided
 Open **Anaconda Prompt** or **PowerShell** with Conda available and navigate to the repository folder:
 
 ```powershell
-cd path\to\Spectral-Phasor-Quantitative-Analysis
+cd "path\to\Spectral-Phasor-Quantitative-Analysis"
 ```
 
 Create the environment:
