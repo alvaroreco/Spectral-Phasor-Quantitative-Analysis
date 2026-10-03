@@ -12,14 +12,67 @@ This repository contains the analysis code associated with:
 
 Spectral phasors provide a model-independent representation of fluorescence spectra.
 
-For a fluorescence spectrum \(I(\lambda)\), the spectral phasor coordinates are calculated as:
+For a fluorescence spectrum \(F(\lambda)\), the spectral phasor coordinates are calculated as:
 
 $$
-G_{\lambda} =
-\sum
+G_{\lambda}
+=
+\frac{
+\sum_{\lambda}
+F(\lambda)
+\cos
+\left[
+\frac{2\pi(\lambda-\lambda_0)}{L}
+\right]
+}{
+\sum_{\lambda} F(\lambda)
+}
+$$
+
+$$
+S_{\lambda}
+=
+\frac{
+\sum_{\lambda}
+F(\lambda)
+\sin
+\left[
+\frac{2\pi(\lambda-\lambda_0)}{L}
+\right]
+}{
+\sum_{\lambda} F(\lambda)
+}
+$$
+
+where:
+
+* \(F(\lambda)\) is the fluorescence intensity or weight associated with each wavelength \(\lambda\);
+* \(\lambda_0\) is the reference wavelength;
+* \(L\) is the scale parameter that determines the periodicity of the cosine and sine functions;
+* the numerator calculates the intensity-weighted sum of the corresponding trigonometric function;
+* the denominator normalizes the result by the total fluorescence intensity.
+
+In the implementation used in this repository, the wavelength range is defined by the measured spectrum:
+
+$$
+\lambda_0 = \lambda_{\min}
+$$
+
+and
+
+$$
+L = \lambda_{\max} - \lambda_{\min}.
+$$
+
+Thus, the implementation is equivalent to calculating:
+
+$$
+G_{\lambda}
+=
+\sum_{\lambda}
 \left(
-\frac{I(\lambda)}
-{\sum I(\lambda)}
+\frac{F(\lambda)}
+{\sum_{\lambda}F(\lambda)}
 \right)
 \cos
 \left[
@@ -29,252 +82,28 @@ G_{\lambda} =
 \right]
 $$
 
+and:
+
 $$
-S_{\lambda} =
-\sum
+S_{\lambda}
+=
+\sum_{\lambda}
 \left(
-\frac{I(\lambda)}
-{\sum I(\lambda)}
+\frac{F(\lambda)}
+{\sum_{\lambda}F(\lambda)}
 \right)
 \sin
 \left[
 2\pi
 \frac{\lambda-\lambda_{\min}}
 {\lambda_{\max}-\lambda_{\min}}
-\right]
+\right].
 $$
 
 The repository provides two main analysis workflows:
 
 * **Spectral phasor analysis and visualization**
 * **Thermodynamic analysis of reversible transitions**
-
----
-
-## Requirements
-
-The repository requires **Python 3.9.x**.
-
-The code was developed and tested with:
-
-* Python 3.9.7
-* NumPy 1.20.3
-* SciPy 1.7.1
-* Matplotlib 3.4.3
-* pandas 1.3.4
-
-The exact dependency versions are provided in:
-
-* `requirements.txt`
-* `environment.yml`
-
-### Recommended installation
-
-A dedicated Conda environment is recommended.
-
-You do **not** need to replace or downgrade the Python installation on your computer. The Conda environment contains its own Python 3.9 installation and does not modify the system Python.
-
-From the repository directory, run:
-
-```powershell
-conda env create -f environment.yml
-conda activate spectral-phasor
-```
-
-Verify the Python version:
-
-```powershell
-python --version
-```
-
-It should report Python 3.9.x.
-
-You can also verify that the required packages are available:
-
-```powershell
-python -c "import numpy, scipy, matplotlib, pandas; print('Environment OK')"
-```
-
-The expected output is:
-
-```text
-Environment OK
-```
-
-### Alternative installation
-
-If Python 3.9.x is already installed and you are not using Conda, the dependencies can be installed with:
-
-```powershell
-python -m pip install -r requirements.txt
-```
-
-The Conda environment is recommended because the repository uses specific versions of the scientific Python packages.
-
----
-
-## Input data
-
-The analysis scripts support two different ways of organizing spectral data:
-
-1. **One spectrum per file**
-2. **Multiple spectra in a single file**
-
-The following file formats are supported:
-
-* CSV (`.csv`)
-* Text (`.txt`)
-* DAT (`.dat`)
-* Excel (`.xlsx`)
-* Excel (`.xls`)
-
-Input data should be organized inside the `data/` directory. Multiple experimental datasets can be stored in different subfolders.
-
-For example:
-
-```text
-data/
-├── Example 2 states/
-├── Example 3 states/
-└── Another dataset/
-```
-
-The user selects the appropriate data folder when the program starts.
-
-The selected folder name is also used as the name of the experimental variable in the thermodynamic analysis.
-
----
-
-## Data organization
-
-### One spectrum per file
-
-When one spectrum is stored per file, the **file name is used as the spectrum label**.
-
-For example, a dataset may be organized as:
-
-```text
-data/
-└── Dataset/
-    ├── spectrum_1.csv
-    ├── spectrum_2.csv
-    ├── spectrum_3.csv
-    └── spectrum_4.csv
-```
-
-Each file contains one fluorescence spectrum.
-
-The program uses the file name (without the file extension) as the spectrum identifier.
-
-For example:
-
-```text
-spectrum_1
-spectrum_2
-spectrum_3
-spectrum_4
-```
-
-For **spectral phasor plotting**, these labels are identifiers only and can be numerical or non-numerical.
-
-For **thermodynamic analysis**, however, the labels must represent numerical values of the experimental variable. The program converts these labels to numerical values and sorts the spectra numerically before performing the analysis.
-
-This prevents alphabetical file ordering from affecting the experimental sequence.
-
-For example, numerical labels such as:
-
-```text
-0.000
-0.026
-0.051
-0.100
-```
-
-can be used for thermodynamic analysis.
-
-Labels such as:
-
-```text
-A1
-A2
-Sample1
-```
-
-cannot be used as thermodynamic experimental values.
-
----
-
-### Multiple spectra in a single file
-
-When multiple spectra are stored in a single file, the file should contain the spectrum labels in the first row after the selected header rows.
-
-The first column contains the wavelength values.
-
-A generic structure is:
-
-```text
-Condition    Label_1    Label_2    Label_3
-300.0        0.102      0.115      0.128
-301.0        0.104      0.117      0.131
-302.0        0.107      0.119      0.134
-...
-```
-
-Here:
-
-* the first row identifies the individual spectra;
-* the first column contains the wavelength values;
-* the remaining columns contain the corresponding fluorescence intensities.
-
-For thermodynamic analysis, the spectrum labels must be numerical experimental values.
-
-For example:
-
-```text
-Condition    0.000    0.026    0.051    0.100
-```
-
-is valid for thermodynamic analysis.
-
-The program uses the selected data folder as the experimental variable name rather than the first cell of the data table.
-
----
-
-## Interactive data selection
-
-The programs guide the user through the data selection process.
-
-The workflow is:
-
-1. **Select the data folder**
-2. **Select the input file format**
-3. **Select the data organization**
-
-   * One spectrum per file
-   * Multiple spectra in a single file
-4. **Select the files to analyze**
-5. **Select the number of header rows to skip**
-
-When multiple files are available, the program allows the user to select:
-
-* all files by pressing `Enter`;
-* individual files by their index;
-* ranges of files;
-* combinations of individual files and ranges.
-
-For example:
-
-```text
-1-4
-```
-
-selects files 1 through 4, while:
-
-```text
-1,3,5
-```
-
-selects files 1, 3, and 5.
 
 ---
 
@@ -319,7 +148,8 @@ The user then selects the thermodynamic states defining the transitions.
 For each transition, the program calculates the relative spectral phasor distance:
 
 $$
-r(x) =
+r(x)
+=
 \frac{
 d_{\mathrm{initial},x}
 }{
@@ -327,12 +157,16 @@ d_{\mathrm{initial},\mathrm{final}}
 }
 $$
 
-where \(d\) represents the Euclidean distance between spectral phasor coordinates.
+where:
 
-The relative distance is fitted using:
+* \(d_{\mathrm{initial},x}\) is the Euclidean distance between the phasor coordinates of the initial state and the spectrum measured at experimental condition \(x\);
+* \(d_{\mathrm{initial},\mathrm{final}}\) is the Euclidean distance between the initial and final states.
+
+The relative phasor distance is then fitted using the thermodynamic model:
 
 $$
-r(x) =
+r(x)
+=
 \frac{
 I_{\mathrm{final}}
 }{
@@ -348,22 +182,22 @@ $$
 
 where:
 
-* \(G_{\lambda}\) and \(S_{\lambda}\) are the spectral phasor coordinates;
 * \(r(x)\) is the relative spectral phasor distance;
 * \(I_{\mathrm{initial}}\) is the integrated fluorescence of the initial state;
 * \(I_{\mathrm{final}}\) is the integrated fluorescence of the final state;
 * \(\Delta G\) is the standard free-energy difference;
-* \(m\) describes the dependence of the free energy on the experimental variable;
+* \(m\) describes the dependence of the free energy on the experimental variable \(x\);
 * \(R\) is the gas constant;
 * \(T\) is the absolute temperature;
 * \(x\) is the experimental variable.
 
 The fit provides estimates of:
 
-* \(\Delta G\)
-* the standard error of \(\Delta G\)
-* \(m\)
-* the standard error of \(m\)
+* \(\Delta G\);
+* the standard error of \(\Delta G\);
+* \(m\);
+* the standard error of \(m\).
+
 
 ---
 
