@@ -53,13 +53,48 @@ The repository was developed and tested with:
 * Matplotlib 3.4.3
 * pandas 1.3.4
 
-The recommended installation method is the Conda environment provided with the repository.
+The recommended installation method is the **Conda environment provided with the repository**.
+
+If Conda is not already installed, **Miniconda is sufficient and is recommended**. The full Anaconda distribution is not required.
 
 Using a dedicated Conda environment avoids conflicts with the Python installation already present on the computer.
 
 The repository does **not** require replacing or modifying the system Python installation.
 
 ---
+
+## Installing Conda
+
+The recommended way to run this repository is through a dedicated Conda environment.
+
+If Conda is not already installed on the computer, **Miniconda** is recommended. Miniconda provides Conda and the basic packages required to create the environment, without installing the full Anaconda distribution.
+
+### Installing Miniconda
+
+Download and install Miniconda for your operating system from the official Miniconda documentation:
+
+https://docs.conda.io/projects/miniconda/en/latest/
+
+For Windows, download the **Windows 64-bit** installer unless a different architecture is specifically required.
+
+During installation, the default options are generally sufficient. There is no need to replace or modify an existing Python installation.
+
+After installation, open **Anaconda Prompt** or a new **PowerShell** window and verify that Conda is available:
+
+```powershell
+conda --version
+```
+
+A version number should be displayed, for example:
+
+```text
+conda 25.x.x
+```
+
+If `conda` is not recognized in PowerShell immediately after installation, close and reopen the terminal and try again.
+
+Once Conda is available, proceed to [Getting the repository](#getting-the-repository) and then create the dedicated environment using the `environment.yml` file provided with the repository.
+
 
 ## Getting the repository
 
