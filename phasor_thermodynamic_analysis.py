@@ -3,11 +3,11 @@ Spectral phasor analysis for thermodynamic denaturation.
 
 This script:
 
-    - Loads fluorescence spectra.
+    - Loads fluorescence spectra using data_reader.py.
     - Supports spectra stored either:
         1. one spectrum per file, or
         2. multiple spectra in a single file.
-    - Uses the spectrum label as the experimental x-value.
+    - Uses numerical spectrum labels as experimental x-values.
     - Requires numerical spectrum labels for thermodynamic analysis.
     - Calculates spectral phasor coordinates.
     - Allows the user to select thermodynamic states.
@@ -21,6 +21,11 @@ This script:
     - Saved figures do not have titles.
     - Optionally exports analysis data and thermodynamic results.
     - Does not export smooth fitted curves as separate files.
+
+Data loading is handled exclusively by data_reader.py.
+
+General spectral phasor and thermodynamic functions are handled
+by phasor_functions.py.
 
 The thermodynamic model is:
 
@@ -40,8 +45,49 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
-from matplotlib.ticker import AutoMinorLocator
 
+
+# ======================================================================
+# PROJECT PATH
+# ======================================================================
+
+PROJECT_DIR = Path(__file__).resolve().parent
+
+if str(PROJECT_DIR) not in sys.path:
+    sys.path.insert(0, str(PROJECT_DIR))
+
+
+# ======================================================================
+# IMPORT REPOSITORY MODULES
+# ======================================================================
+
+from data_reader import load_data_with_x_values
+
+from phasor_functions import (
+    G,
+    S,
+    distance,
+    relative_distance,
+    exp_phasor,
+    create_spectra_plot,
+    create_phasor_plot,
+    plot_phasor_trajectory,
+    plot_state_connections,
+    plot_thermodynamic_graph,
+)
+
+
+# ======================================================================
+# GENERAL SETTINGS
+# ======================================================================
+
+UNIVERSAL_CIRCLE = False
+GRID = True
+
+
+# ======================================================================
+# ERROR REPORTING
+# ======================================================================
 
 def report_error(error):
     """Display a user-friendly error message."""
@@ -74,680 +120,392 @@ def report_error(error):
     print("=" * 70)
 
 
-def main():
+# ======================================================================
+# THERMODYNAMIC STATE SELECTION
+# ======================================================================
 
-    # ============================================================
-    # PROJECT PATH
-    # ============================================================
+def select_thermodynamic_states(number_of_spectra):
+    """
+    Select the thermodynamic states used for the analysis.
 
-    PROJECT_DIR = Path(__file__).resolve().parent
+    The first and last spectra are always selected.
+    Intermediate states can be selected by spectrum number.
+    """
 
-    sys.path.insert(
-        0,
-        str(PROJECT_DIR)
+    if number_of_spectra < 2:
+        raise ValueError(
+            "At least two spectra are required for thermodynamic analysis."
+        )
+
+    print("\nSelect the thermodynamic states.")
+    print("The first and last spectra are automatically selected.")
+    print(
+        "You can select intermediate states by entering their "
+        "spectrum numbers in increasing order.\n"
     )
 
-
-    # ============================================================
-    # IMPORTS FROM REPOSITORY MODULES
-    # ============================================================
-
-    from data_reader import load_data_with_x_values
-
-    from phasor_functions import (
-        G,
-        S,
-        create_spectra_plot,
-        create_phasor_plot,
-        plot_phasor_trajectory,
-        plot_state_connections
+    print(
+        f"Number of spectra available: "
+        f"{number_of_spectra}"
     )
 
+    if number_of_spectra == 2:
+        return [0, 1]
 
-    # ============================================================
-    # GENERAL SETTINGS
-    # ============================================================
+    print(
+        f"\nEnter the intermediate state spectrum numbers "
+        f"(2 to {number_of_spectra - 1})."
+    )
 
-    UNIVERSAL_CIRCLE = False
-    GRID = True
+    print("Separate multiple numbers with commas.")
+    print("Press Enter if there are no intermediate states.")
 
+    user_input = input(
+        "\nIntermediate states: "
+    ).strip()
 
-    # ============================================================
-    # SELECT THERMODYNAMIC STATES
-    # ============================================================
-
-    def select_thermodynamic_states(number_of_spectra):
-        """
-        Select the thermodynamic states used for the analysis.
-
-        The first and last spectra are always selected.
-        Intermediate states can be selected by spectrum number.
-        """
-
-        print("\nSelect the thermodynamic states.")
-        print("The first and last spectra are automatically selected.")
-        print(
-            "You can select intermediate states by entering their "
-            "spectrum numbers in increasing order.\n"
-        )
-
-        print(
-            f"Number of spectra available: "
-            f"{number_of_spectra}"
-        )
-
-        if number_of_spectra < 2:
-
-            raise ValueError(
-                "At least two spectra are required "
-                "for thermodynamic analysis."
-            )
-
-        if number_of_spectra == 2:
-
-            return [0, 1]
-
-        print(
-            f"\nEnter the intermediate state spectrum numbers "
-            f"(2 to {number_of_spectra - 1})."
-        )
-
-        print(
-            "Separate multiple numbers with commas."
-        )
-
-        print(
-            "Press Enter if there are no intermediate states."
-        )
-
-        user_input = input(
-            "\nIntermediate states: "
-        ).strip()
-
-        if user_input == "":
-
-            return [
-                0,
-                number_of_spectra - 1
-            ]
-
-        try:
-
-            intermediate_numbers = [
-                int(value.strip())
-                for value in user_input.split(",")
-            ]
-
-        except ValueError:
-
-            raise ValueError(
-                "Invalid state selection.\n"
-                "Please enter spectrum numbers separated by commas."
-            )
-
-        if len(set(intermediate_numbers)) != len(
-            intermediate_numbers
-        ):
-
-            raise ValueError(
-                "Intermediate states cannot be repeated."
-            )
-
-        for number in intermediate_numbers:
-
-            if (
-                number < 2
-                or number > number_of_spectra - 1
-            ):
-
-                raise ValueError(
-                    f"Intermediate state {number} "
-                    "is outside the allowed range."
-                )
-
-        if intermediate_numbers != sorted(
-            intermediate_numbers
-        ):
-
-            raise ValueError(
-                "Intermediate states must be entered "
-                "in increasing order."
-            )
-
-        # Convert from spectrum numbers
-        # (1-based) to Python indices (0-based)
-
-        state_indices = [0]
-
-        for number in intermediate_numbers:
-
-            state_indices.append(
-                number - 1
-            )
-
-        state_indices.append(
+    if user_input == "":
+        return [
+            0,
             number_of_spectra - 1
-        )
+        ]
 
-        return state_indices
+    try:
+        intermediate_numbers = [
+            int(value.strip())
+            for value in user_input.split(",")
+        ]
 
+    except ValueError as error:
+        raise ValueError(
+            "Invalid state selection.\n"
+            "Please enter spectrum numbers separated by commas."
+        ) from error
 
-    # ============================================================
-    # TEMPERATURE AND ENERGY UNITS
-    # ============================================================
-
-    def select_temperature_and_units():
-        """
-        Select temperature and energy units.
-        """
-
-        print("\nThermodynamic parameters")
-        print("------------------------")
-
-        temperature_input = input(
-            "Temperature (K): "
-        ).strip()
-
-        try:
-
-            T = float(
-                temperature_input
-            )
-
-        except ValueError:
-
-            raise ValueError(
-                "Temperature must be a numerical value.\n"
-                "Example: 298.15"
-            )
-
-        if not np.isfinite(T):
-
-            raise ValueError(
-                "Temperature must be a finite numerical value."
-            )
-
-        if T <= 0:
-
-            raise ValueError(
-                "Temperature must be greater than zero."
-            )
-
-        print(
-            "\nSelect energy units for ΔG:"
-        )
-
-        print("1 - J/mol")
-        print("2 - kJ/mol")
-        print("3 - cal/mol")
-        print("4 - kcal/mol")
-
-        unit_choice = input(
-            "\nChoice: "
-        ).strip()
-
-        if unit_choice == "1":
-
-            R = 8.314462618
-            unit = "J/mol"
-
-        elif unit_choice == "2":
-
-            R = 0.008314462618
-            unit = "kJ/mol"
-
-        elif unit_choice == "3":
-
-            R = 1.987204258
-            unit = "cal/mol"
-
-        elif unit_choice == "4":
-
-            R = 0.001987204258
-            unit = "kcal/mol"
-
-        else:
-
-            raise ValueError(
-                "Invalid energy-unit choice.\n"
-                "Please select 1, 2, 3, or 4."
-            )
-
-        print(
-            f"\nTemperature: {T:.2f} K"
-        )
-
-        print(
-            f"Energy units: {unit}"
-        )
-
-        print(
-            f"Gas constant: {R}"
-        )
-
-        return T, R, unit
-
-
-    # ============================================================
-    # DISTANCE FUNCTIONS
-    # ============================================================
-
-    def distance(G1, S1, G2, S2):
-        """
-        Euclidean distance between two spectral phasor coordinates.
-        """
-
-        return np.sqrt(
-            (G2 - G1) ** 2
-            +
-            (S2 - S1) ** 2
-        )
-
-
-    def rd(G1, G2, Gi, S1, S2, Si):
-        """
-        Relative distance from the initial state to an experimental
-        phasor point, normalized by the distance between the initial
-        and final thermodynamic states.
-        """
-
-        denominator = distance(
-            G1,
-            S1,
-            G2,
-            S2
-        )
-
-        if denominator == 0:
-
-            raise ValueError(
-                "The initial and final thermodynamic states "
-                "have identical phasor coordinates.\n"
-                "The relative phasor distance cannot be calculated "
-                "for this transition."
-            )
-
-        return (
-            distance(
-                G1,
-                S1,
-                Gi,
-                Si
-            )
-            /
-            denominator
-        )
-
-
-    # ============================================================
-    # THERMODYNAMIC MODEL
-    # ============================================================
-
-    def exp_phasor(
-        x,
-        I_initial,
-        I_final,
-        dG,
-        m,
-        T,
-        R
+    if len(set(intermediate_numbers)) != len(
+        intermediate_numbers
     ):
-        """
-        Thermodynamic model for the relative phasor distance.
-        """
-
-        exp_term = np.exp(
-            (dG - m * x)
-            /
-            (R * T)
+        raise ValueError(
+            "Intermediate states cannot be repeated."
         )
 
-        return I_final / (
-            I_final
-            +
-            I_initial * exp_term
-        )
+    for number in intermediate_numbers:
 
-
-    # ============================================================
-    # PLOT FORMATTING
-    # ============================================================
-
-    def graph(
-        x,
-        y,
-        ax,
-        color='black',
-        xlabel='x',
-        ylabel='y',
-        tipo='line',
-        linewidth=2.5,
-        markersize=120,
-        fontsize=20
-    ):
-        """
-        Generic plotting function for thermodynamic analysis.
-        """
-
-        # --------------------------------------------------------
-        # Axis formatting
-        # --------------------------------------------------------
-
-        for side in [
-            'top',
-            'right',
-            'bottom',
-            'left'
-        ]:
-
-            ax.spines[side].set_linewidth(
-                2
-            )
-
-        # --------------------------------------------------------
-        # Plot
-        # --------------------------------------------------------
-
-        if tipo == 'line':
-
-            ax.plot(
-                x,
-                y,
-                color=color,
-                linewidth=linewidth
-            )
-
-        elif tipo == 'scatter':
-
-            ax.scatter(
-                x,
-                y,
-                color=color,
-                s=markersize
-            )
-
-        else:
-
-            raise ValueError(
-                "tipo must be either "
-                "'line' or 'scatter'."
-            )
-
-        # --------------------------------------------------------
-        # Labels
-        # --------------------------------------------------------
-
-        ax.set_xlabel(
-            xlabel,
-            fontsize=fontsize,
-            fontname='sans-serif',
-            labelpad=10
-        )
-
-        ax.set_ylabel(
-            ylabel,
-            fontsize=fontsize,
-            fontname='sans-serif',
-            labelpad=10
-        )
-
-        # --------------------------------------------------------
-        # Tick formatting
-        # --------------------------------------------------------
-
-        ax.tick_params(
-            axis='both',
-            labelsize=16,
-            pad=10
-        )
-
-        for label in (
-            ax.get_xticklabels()
-            +
-            ax.get_yticklabels()
+        if (
+            number < 2
+            or number > number_of_spectra - 1
         ):
-
-            label.set_fontfamily(
-                'sans-serif'
+            raise ValueError(
+                f"Intermediate state {number} "
+                "is outside the allowed range."
             )
 
-        ax.xaxis.set_minor_locator(
-            AutoMinorLocator(2)
-        )
-
-        ax.yaxis.set_minor_locator(
-            AutoMinorLocator(2)
-        )
-
-        ax.tick_params(
-            axis='both',
-            which='major',
-            direction='in',
-            length=6,
-            width=1.5
-        )
-
-        ax.tick_params(
-            axis='both',
-            which='minor',
-            direction='in',
-            length=3,
-            width=1.5
-        )
-
-        return ax
-
-
-    # ============================================================
-    # SAVE FIGURE WITHOUT TITLE
-    # ============================================================
-
-    def save_figure_without_title(
-        figure,
-        axis,
-        output_file,
-        figure_format
+    if intermediate_numbers != sorted(
+        intermediate_numbers
     ):
-        """
-        Save a figure without its title.
+        raise ValueError(
+            "Intermediate states must be entered "
+            "in increasing order."
+        )
 
-        The current title is temporarily removed before saving
-        and restored immediately afterwards.
-        """
+    # Convert from spectrum numbers (1-based)
+    # to Python indices (0-based).
 
-        current_title = axis.get_title()
+    state_indices = [0]
 
-        # Remove title only for the saved file
-        axis.set_title("")
+    for number in intermediate_numbers:
+        state_indices.append(number - 1)
 
-        try:
+    state_indices.append(
+        number_of_spectra - 1
+    )
 
-            if figure_format == "png":
-
-                figure.savefig(
-                    output_file,
-                    format="png",
-                    dpi=300,
-                    bbox_inches="tight"
-                )
-
-            elif figure_format == "tiff":
-
-                figure.savefig(
-                    output_file,
-                    format="tiff",
-                    dpi=300,
-                    bbox_inches="tight",
-                    pil_kwargs={
-                        "compression": "tiff_lzw"
-                    }
-                )
-
-            else:
-
-                raise ValueError(
-                    "Unsupported figure format."
-                )
-
-        finally:
-
-            # Restore title for the displayed figure
-            axis.set_title(
-                current_title
-            )
+    return state_indices
 
 
-    # ============================================================
-    # SORT DATA BY EXPERIMENTAL X-VALUE
-    # ============================================================
+# ======================================================================
+# TEMPERATURE AND ENERGY UNITS
+# ======================================================================
 
-    def sort_spectral_data_by_x(
+def select_temperature_and_units():
+    """Select temperature and energy units."""
+
+    print("\nThermodynamic parameters")
+    print("------------------------")
+
+    temperature_input = input(
+        "Temperature (K): "
+    ).strip()
+
+    try:
+        temperature = float(
+            temperature_input
+        )
+
+    except ValueError as error:
+        raise ValueError(
+            "Temperature must be a numerical value.\n"
+            "Example: 298.15"
+        ) from error
+
+    if not np.isfinite(temperature):
+        raise ValueError(
+            "Temperature must be a finite numerical value."
+        )
+
+    if temperature <= 0:
+        raise ValueError(
+            "Temperature must be greater than zero."
+        )
+
+    print("\nSelect energy units for ΔG:")
+    print("1 - J/mol")
+    print("2 - kJ/mol")
+    print("3 - cal/mol")
+    print("4 - kcal/mol")
+
+    unit_choice = input(
+        "\nChoice: "
+    ).strip()
+
+    if unit_choice == "1":
+
+        gas_constant = 8.314462618
+        energy_unit = "J/mol"
+
+    elif unit_choice == "2":
+
+        gas_constant = 0.008314462618
+        energy_unit = "kJ/mol"
+
+    elif unit_choice == "3":
+
+        gas_constant = 1.987204258
+        energy_unit = "cal/mol"
+
+    elif unit_choice == "4":
+
+        gas_constant = 0.001987204258
+        energy_unit = "kcal/mol"
+
+    else:
+
+        raise ValueError(
+            "Invalid energy-unit choice.\n"
+            "Please select 1, 2, 3, or 4."
+        )
+
+    print(
+        f"\nTemperature: {temperature:.2f} K"
+    )
+
+    print(
+        f"Energy units: {energy_unit}"
+    )
+
+    print(
+        f"Gas constant: {gas_constant}"
+    )
+
+    return (
+        temperature,
+        gas_constant,
+        energy_unit
+    )
+
+
+# ======================================================================
+# SORT DATA BY EXPERIMENTAL X-VALUE
+# ======================================================================
+
+def sort_spectral_data_by_x(
+    wavelengths,
+    spectra,
+    labels,
+    x_values
+):
+    """
+    Sort spectra according to increasing experimental x-value.
+
+    This is necessary because file names or file-column order may
+    not correspond to the numerical order of the experimental variable.
+    """
+
+    x_values = np.asarray(
+        x_values,
+        dtype=float
+    )
+
+    if x_values.ndim != 1:
+        raise ValueError(
+            "Experimental x-values must form a one-dimensional array."
+        )
+
+    if not np.all(
+        np.isfinite(x_values)
+    ):
+        raise ValueError(
+            "The experimental x-values contain non-finite values."
+        )
+
+    if len(x_values) != len(spectra):
+        raise ValueError(
+            "The number of experimental x-values does not match "
+            "the number of spectra."
+        )
+
+    order = np.argsort(
+        x_values
+    )
+
+    x_values = x_values[order]
+
+    spectra = np.asarray(
+        spectra
+    )[order]
+
+    labels = [
+        labels[index]
+        for index in order
+    ]
+
+    return (
         wavelengths,
         spectra,
         labels,
         x_values
-    ):
-        """
-        Sort spectra according to increasing experimental x-value.
-
-        This is particularly important when spectra are stored as
-        separate files, because alphabetical sorting of filenames
-        does not necessarily correspond to numerical ordering.
-        """
-
-        x_values = np.asarray(
-            x_values,
-            dtype=float
-        )
-
-        if not np.all(
-            np.isfinite(x_values)
-        ):
-
-            raise ValueError(
-                "The experimental x-values contain "
-                "non-finite values."
-            )
-
-        order = np.argsort(
-            x_values
-        )
-
-        x_values = x_values[order]
-
-        spectra = np.asarray(
-            spectra
-        )[order]
-
-        labels = [
-            labels[index]
-            for index in order
-        ]
-
-        return (
-            wavelengths,
-            spectra,
-            labels,
-            x_values
-        )
+    )
 
 
-    # ============================================================
-    # ANALYZE ONE TRANSITION
-    # ============================================================
+# ======================================================================
+# ANALYZE ONE TRANSITION
+# ======================================================================
 
-    def calculate_transition(
-        transition_number,
+def calculate_transition(
+    transition_number,
+    initial_index,
+    final_index,
+    wavelengths,
+    spectra,
+    G_values,
+    S_values,
+    x_values,
+    temperature,
+    gas_constant
+):
+    """
+    Calculate relative phasor distances and fit one thermodynamic
+    transition.
+    """
+
+    # ------------------------------------------------------------------
+    # Experimental points belonging to this transition
+    # ------------------------------------------------------------------
+
+    # The final state is excluded from the experimental points,
+    # preserving the original analysis convention.
+
+    indices = np.arange(
         initial_index,
-        final_index,
-        wavelengths,
-        spectra,
-        G_values,
-        S_values,
-        x_values,
-        T,
-        R
+        final_index
+    )
+
+    x_transition = np.asarray(
+        x_values[indices],
+        dtype=float
+    )
+
+    # ------------------------------------------------------------------
+    # Validate experimental x-values
+    # ------------------------------------------------------------------
+
+    if len(x_transition) < 2:
+
+        raise ValueError(
+            f"Transition {transition_number} does not contain "
+            "enough experimental points for thermodynamic fitting.\n"
+            f"Initial state: spectrum {initial_index + 1} "
+            f"(x = {x_values[initial_index]})\n"
+            f"Final state: spectrum {final_index + 1} "
+            f"(x = {x_values[final_index]})\n\n"
+            "At least two experimental points are required "
+            "to fit ΔG and m.\n"
+            "Select an intermediate spectrum between these "
+            "states or select thermodynamic states farther apart."
+        )
+
+    if not np.all(
+        np.isfinite(x_transition)
     ):
-
-        # --------------------------------------------------------
-        # Experimental points belonging to this transition
-        # --------------------------------------------------------
-
-        indices = np.arange(
-            initial_index,
-            final_index
+        raise ValueError(
+            f"Transition {transition_number} contains "
+            "non-finite experimental x-values."
         )
 
-        x_transition = np.asarray(
-            x_values[indices],
-            dtype=float
+    if len(
+        np.unique(x_transition)
+    ) < 2:
+        raise ValueError(
+            f"Transition {transition_number} contains "
+            "repeated experimental x-values.\n"
+            "The fitting procedure requires at least "
+            "two different x-values."
         )
 
-        # --------------------------------------------------------
-        # Validate number of experimental points
-        # --------------------------------------------------------
+    # ------------------------------------------------------------------
+    # Initial and final phasor coordinates
+    # ------------------------------------------------------------------
 
-        if len(x_transition) < 2:
+    G_initial = G_values[
+        initial_index
+    ]
 
-            raise ValueError(
-                f"Transition {transition_number} does not contain "
-                "enough experimental points for thermodynamic fitting.\n"
-                f"Initial state: spectrum {initial_index + 1} "
-                f"(x = {x_values[initial_index]})\n"
-                f"Final state: spectrum {final_index + 1} "
-                f"(x = {x_values[final_index]})\n\n"
-                "At least two experimental points are required "
-                "to fit dG and m.\n"
-                "Select an intermediate spectrum between these "
-                "states or select thermodynamic states farther apart."
-            )
+    S_initial = S_values[
+        initial_index
+    ]
 
-        if not np.all(
-            np.isfinite(x_transition)
-        ):
+    G_final = G_values[
+        final_index
+    ]
 
-            raise ValueError(
-                f"Transition {transition_number} contains "
-                "non-finite experimental x-values."
-            )
+    S_final = S_values[
+        final_index
+    ]
 
-        if len(
-            np.unique(x_transition)
-        ) < 2:
+    # ------------------------------------------------------------------
+    # Validate initial/final phasor separation
+    # ------------------------------------------------------------------
 
-            raise ValueError(
-                f"Transition {transition_number} contains "
-                "repeated experimental x-values.\n"
-                "The fitting procedure requires at least "
-                "two different x-values."
-            )
+    state_distance = distance(
+        G_initial,
+        S_initial,
+        G_final,
+        S_final
+    )
 
-        # --------------------------------------------------------
-        # Initial and final phasor coordinates
-        # --------------------------------------------------------
+    if not np.isfinite(state_distance):
 
-        G_initial = G_values[
-            initial_index
-        ]
+        raise ValueError(
+            f"Transition {transition_number}: the distance between "
+            "the initial and final phasor states is not finite."
+        )
 
-        S_initial = S_values[
-            initial_index
-        ]
+    if state_distance == 0:
 
-        G_final = G_values[
-            final_index
-        ]
+        raise ValueError(
+            f"Transition {transition_number}: the initial and final "
+            "thermodynamic states have identical phasor coordinates.\n"
+            "The relative phasor distance cannot be calculated "
+            "for this transition."
+        )
 
-        S_final = S_values[
-            final_index
-        ]
+    # ------------------------------------------------------------------
+    # Relative phasor distances
+    # ------------------------------------------------------------------
 
-        # --------------------------------------------------------
-        # Relative phasor distances
-        # --------------------------------------------------------
-
-        r_values = np.array([
-            rd(
+    r_values = np.array(
+        [
+            relative_distance(
                 G_initial,
                 G_final,
                 G_values[index],
@@ -756,22 +514,25 @@ def main():
                 S_values[index]
             )
             for index in indices
-        ])
+        ],
+        dtype=float
+    )
 
-        if not np.all(
-            np.isfinite(r_values)
-        ):
+    if not np.all(
+        np.isfinite(r_values)
+    ):
+        raise ValueError(
+            f"Transition {transition_number} produced "
+            "non-finite relative phasor distances.\n"
+            "Check the selected initial and final states "
+            "and the spectral data."
+        )
 
-            raise ValueError(
-                f"Transition {transition_number} produced "
-                "non-finite relative phasor distances.\n"
-                "Check the selected initial and final states "
-                "and the spectral data."
-            )
+    # ------------------------------------------------------------------
+    # Integrated fluorescence
+    # ------------------------------------------------------------------
 
-        # --------------------------------------------------------
-        # Integrated fluorescence of initial and final spectra
-        # --------------------------------------------------------
+    try:
 
         I_initial = np.trapz(
             spectra[initial_index],
@@ -783,286 +544,379 @@ def main():
             wavelengths
         )
 
-        if not np.isfinite(I_initial):
+    except (TypeError, ValueError) as error:
 
-            raise ValueError(
-                f"Transition {transition_number}: the integrated "
-                "fluorescence of the initial spectrum is not finite."
-            )
+        raise ValueError(
+            f"Transition {transition_number}: integrated fluorescence "
+            "could not be calculated from the selected spectra."
+        ) from error
 
-        if not np.isfinite(I_final):
+    if not np.isfinite(I_initial):
 
-            raise ValueError(
-                f"Transition {transition_number}: the integrated "
-                "fluorescence of the final spectrum is not finite."
-            )
+        raise ValueError(
+            f"Transition {transition_number}: the integrated "
+            "fluorescence of the initial spectrum is not finite."
+        )
 
-        if I_initial == 0:
+    if not np.isfinite(I_final):
 
-            raise ValueError(
-                f"Transition {transition_number}: the integrated "
-                "fluorescence of the initial spectrum is zero.\n"
-                "The thermodynamic model cannot be fitted."
-            )
+        raise ValueError(
+            f"Transition {transition_number}: the integrated "
+            "fluorescence of the final spectrum is not finite."
+        )
 
-        if I_final == 0:
+    if I_initial == 0:
 
-            raise ValueError(
-                f"Transition {transition_number}: the integrated "
-                "fluorescence of the final spectrum is zero.\n"
-                "The thermodynamic model cannot be fitted."
-            )
+        raise ValueError(
+            f"Transition {transition_number}: the integrated "
+            "fluorescence of the initial spectrum is zero.\n"
+            "The thermodynamic model cannot be fitted."
+        )
 
-        # --------------------------------------------------------
-        # Initial guesses according to energy units
-        # --------------------------------------------------------
+    if I_final == 0:
 
-        if np.isclose(
-            R,
-            8.314462618
-        ):
+        raise ValueError(
+            f"Transition {transition_number}: the integrated "
+            "fluorescence of the final spectrum is zero.\n"
+            "The thermodynamic model cannot be fitted."
+        )
 
-            p0 = [
-                10000,
-                20000
-            ]
+    # ------------------------------------------------------------------
+    # Initial guesses according to energy units
+    # ------------------------------------------------------------------
 
-        elif np.isclose(
-            R,
-            0.008314462618
-        ):
+    if np.isclose(
+        gas_constant,
+        8.314462618
+    ):
 
-            p0 = [
-                10,
-                20
-            ]
+        p0 = [
+            10000,
+            20000
+        ]
 
-        elif np.isclose(
-            R,
-            1.987204258
-        ):
+    elif np.isclose(
+        gas_constant,
+        0.008314462618
+    ):
 
-            p0 = [
-                2390,
-                4780
-            ]
+        p0 = [
+            10,
+            20
+        ]
 
-        elif np.isclose(
-            R,
-            0.001987204258
-        ):
+    elif np.isclose(
+        gas_constant,
+        1.987204258
+    ):
 
-            p0 = [
-                2.39,
-                4.78
-            ]
+        p0 = [
+            2390,
+            4780
+        ]
 
-        else:
+    elif np.isclose(
+        gas_constant,
+        0.001987204258
+    ):
 
-            p0 = [
-                10000,
-                20000
-            ]
+        p0 = [
+            2.39,
+            4.78
+        ]
 
-        # --------------------------------------------------------
-        # Thermodynamic fit
-        # --------------------------------------------------------
+    else:
 
-        def fit_function(
+        raise ValueError(
+            "The gas constant is not recognized."
+        )
+
+    # ------------------------------------------------------------------
+    # Thermodynamic fit
+    # ------------------------------------------------------------------
+
+    def fit_function(
+        x,
+        dG,
+        m
+    ):
+        """Wrapper around the thermodynamic model for curve_fit."""
+
+        return exp_phasor(
             x,
+            I_initial,
+            I_final,
             dG,
-            m
-        ):
+            m,
+            temperature,
+            gas_constant
+        )
 
-            return exp_phasor(
-                x,
-                I_initial,
-                I_final,
-                dG,
-                m,
-                T,
-                R
-            )
+    try:
 
-        try:
+        popt, pcov = curve_fit(
+            fit_function,
+            x_transition,
+            r_values,
+            p0=p0,
+            maxfev=100000
+        )
 
-            popt, pcov = curve_fit(
-                fit_function,
-                x_transition,
-                r_values,
-                p0=p0,
-                maxfev=100000
-            )
+    except RuntimeError as error:
 
-        except RuntimeError as error:
+        raise RuntimeError(
+            f"Thermodynamic fit failed for transition "
+            f"{transition_number}.\n\n"
+            f"Experimental x-values:\n"
+            f"{x_transition}\n\n"
+            f"Relative phasor distances:\n"
+            f"{r_values}\n\n"
+            "Possible causes:\n"
+            "  - The selected transition does not contain "
+            "enough experimental points.\n"
+            "  - The experimental data do not follow the "
+            "thermodynamic model.\n"
+            "  - The initial and final states are too similar.\n"
+            "  - The fitting parameters could not be determined "
+            "from the available data."
+        ) from error
 
-            raise RuntimeError(
-                f"Thermodynamic fit failed for transition "
-                f"{transition_number}.\n\n"
-                f"Experimental x-values:\n"
-                f"{x_transition}\n\n"
-                f"Relative phasor distances:\n"
-                f"{r_values}\n\n"
-                "Possible causes:\n"
-                "  - The selected transition does not contain "
-                "enough experimental points.\n"
-                "  - The experimental data do not follow the "
-                "thermodynamic model.\n"
-                "  - The initial and final states are too similar.\n"
-                "  - The fitting parameters could not be determined "
-                "from the available data."
-            ) from error
+    except (ValueError, TypeError) as error:
 
-        except ValueError as error:
+        raise ValueError(
+            f"Invalid numerical values encountered while fitting "
+            f"transition {transition_number}.\n"
+            "Check the spectra, x-values, integrated fluorescence, "
+            "and selected thermodynamic states."
+        ) from error
 
-            raise ValueError(
-                f"Invalid numerical values encountered while fitting "
-                f"transition {transition_number}.\n"
-                "Check the spectra, x-values, and selected "
-                "thermodynamic states."
-            ) from error
+    # ------------------------------------------------------------------
+    # Validate fitted parameters
+    # ------------------------------------------------------------------
 
-        dG_fit = popt[0]
-        m_fit = popt[1]
+    if not np.all(
+        np.isfinite(popt)
+    ):
+        raise RuntimeError(
+            f"Thermodynamic fit for transition "
+            f"{transition_number} returned non-finite parameters."
+        )
 
-        if not np.all(
-            np.isfinite(popt)
-        ):
+    if pcov.shape != (2, 2):
 
-            raise RuntimeError(
-                f"Thermodynamic fit for transition "
-                f"{transition_number} returned non-finite "
-                "parameters."
-            )
+        raise RuntimeError(
+            f"The covariance matrix for transition "
+            f"{transition_number} has an unexpected shape."
+        )
 
+    with np.errstate(
+        invalid="ignore"
+    ):
         perr = np.sqrt(
             np.diag(pcov)
         )
 
-        if not np.all(
-            np.isfinite(perr)
-        ):
+    if not np.all(
+        np.isfinite(perr)
+    ):
+        raise RuntimeError(
+            f"The parameter uncertainties for transition "
+            f"{transition_number} could not be determined."
+        )
 
-            raise RuntimeError(
-                f"The parameter uncertainties for transition "
-                f"{transition_number} could not be determined."
+    dG_fit = popt[0]
+    m_fit = popt[1]
+
+    dG_error = perr[0]
+    m_error = perr[1]
+
+    # ------------------------------------------------------------------
+    # Smooth fitted curve
+    #
+    # Kept in memory for plotting.
+    # It is NOT exported as a separate file.
+    # ------------------------------------------------------------------
+
+    x_fit = np.linspace(
+        np.min(x_transition),
+        np.max(x_transition),
+        500
+    )
+
+    y_fit = exp_phasor(
+        x_fit,
+        I_initial,
+        I_final,
+        dG_fit,
+        m_fit,
+        temperature,
+        gas_constant
+    )
+
+    if not np.all(
+        np.isfinite(y_fit)
+    ):
+        raise RuntimeError(
+            f"The fitted curve for transition "
+            f"{transition_number} contains non-finite values."
+        )
+
+    return {
+        "transition_number":
+            transition_number,
+
+        "initial_index":
+            initial_index,
+
+        "final_index":
+            final_index,
+
+        "x":
+            x_transition,
+
+        "r":
+            r_values,
+
+        "x_fit":
+            x_fit,
+
+        "y_fit":
+            y_fit,
+
+        "I_initial":
+            I_initial,
+
+        "I_final":
+            I_final,
+
+        "dG":
+            dG_fit,
+
+        "dG_error":
+            dG_error,
+
+        "m":
+            m_fit,
+
+        "m_error":
+            m_error,
+
+        "p0":
+            p0
+    }
+
+
+# ======================================================================
+# FIGURE SAVING
+# ======================================================================
+
+def save_figure_without_title(
+    figure,
+    axis,
+    output_file,
+    figure_format
+):
+    """
+    Save a figure without its title.
+
+    The current title is temporarily removed before saving and
+    restored immediately afterwards.
+    """
+
+    current_title = axis.get_title()
+
+    axis.set_title("")
+
+    try:
+
+        if figure_format == "png":
+
+            figure.savefig(
+                output_file,
+                format="png",
+                dpi=300,
+                bbox_inches="tight"
             )
 
-        dG_error = perr[0]
-        m_error = perr[1]
+        elif figure_format == "tiff":
 
-        # --------------------------------------------------------
-        # Smooth fitted curve
-        #
-        # Kept in memory for plotting.
-        # It is NOT exported as a separate file.
-        # --------------------------------------------------------
+            figure.savefig(
+                output_file,
+                format="tiff",
+                dpi=300,
+                bbox_inches="tight",
+                pil_kwargs={
+                    "compression": "tiff_lzw"
+                }
+            )
 
-        x_fit = np.linspace(
-            np.min(x_transition),
-            np.max(x_transition),
-            500
+        else:
+
+            raise ValueError(
+                "Unsupported figure format."
+            )
+
+    except (OSError, ValueError) as error:
+
+        raise OSError(
+            f"Could not save figure:\n"
+            f"{output_file}\n\n"
+            f"Reason: {error}"
+        ) from error
+
+    finally:
+
+        axis.set_title(
+            current_title
         )
 
-        y_fit = exp_phasor(
-            x_fit,
-            I_initial,
-            I_final,
-            dG_fit,
-            m_fit,
-            T,
-            R
-        )
 
-        return {
-            'transition_number':
-                transition_number,
+# ======================================================================
+# EXPORT ANALYSIS DATA
+# ======================================================================
 
-            'initial_index':
-                initial_index,
+def export_all_analysis_data(
+    output_directory,
+    base_name,
+    condition,
+    labels,
+    x_values,
+    G_values,
+    S_values,
+    state_indices,
+    transition_results,
+    temperature,
+    gas_constant,
+    energy_unit
+):
+    """
+    Export numerical results from the thermodynamic analysis.
 
-            'final_index':
-                final_index,
+    Generated files:
 
-            'x':
-                x_transition,
+        1. Human-readable summary text file.
+        2. Spectral phasor data text file.
+        3. One experimental rd-vs-x text file per transition.
 
-            'r':
-                r_values,
+    Smooth fitted curves are intentionally NOT exported.
+    """
 
-            'x_fit':
-                x_fit,
+    output_directory.mkdir(
+        parents=True,
+        exist_ok=True
+    )
 
-            'y_fit':
-                y_fit,
+    # ------------------------------------------------------------------
+    # SUMMARY FILE
+    # ------------------------------------------------------------------
 
-            'I_initial':
-                I_initial,
+    summary_file = (
+        output_directory
+        /
+        f"{base_name}_summary.txt"
+    )
 
-            'I_final':
-                I_final,
-
-            'dG':
-                dG_fit,
-
-            'dG_error':
-                dG_error,
-
-            'm':
-                m_fit,
-
-            'm_error':
-                m_error,
-
-            'p0':
-                p0
-        }
-
-
-    # ============================================================
-    # EXPORT ANALYSIS DATA
-    # ============================================================
-
-    def export_all_analysis_data(
-        output_directory,
-        base_name,
-        condition,
-        labels,
-        x_values,
-        G_values,
-        S_values,
-        state_indices,
-        transition_results,
-        T,
-        R,
-        energy_unit
-    ):
-        """
-        Export numerical results from the thermodynamic analysis.
-
-        The following files are generated:
-
-            1. A human-readable summary text file.
-            2. A phasor data text file.
-            3. One experimental rd-vs-x text file per transition.
-
-        Smooth fitted curves are intentionally NOT exported.
-        """
-
-        output_directory.mkdir(
-            parents=True,
-            exist_ok=True
-        )
-
-        # ========================================================
-        # SUMMARY FILE
-        # ========================================================
-
-        summary_file = (
-            output_directory
-            /
-            f"{base_name}_summary.txt"
-        )
+    try:
 
         with open(
             summary_file,
@@ -1073,11 +927,9 @@ def main():
             file.write(
                 "============================================================\n"
             )
-
             file.write(
                 "SPECTRAL PHASOR THERMODYNAMIC ANALYSIS\n"
             )
-
             file.write(
                 "============================================================\n\n"
             )
@@ -1087,11 +939,11 @@ def main():
             )
 
             file.write(
-                f"Temperature:\n{T:.6g} K\n\n"
+                f"Temperature:\n{temperature:.6g} K\n\n"
             )
 
             file.write(
-                f"Gas constant:\n{R:.12g} "
+                f"Gas constant:\n{gas_constant:.12g} "
                 f"{energy_unit}/(mol·K)\n\n"
             )
 
@@ -1099,18 +951,16 @@ def main():
                 f"Energy units:\n{energy_unit}\n\n"
             )
 
-            # ----------------------------------------------------
+            # ----------------------------------------------------------
             # Loaded spectra
-            # ----------------------------------------------------
+            # ----------------------------------------------------------
 
             file.write(
                 "============================================================\n"
             )
-
             file.write(
                 "SPECTRA LOADED\n"
             )
-
             file.write(
                 "============================================================\n\n"
             )
@@ -1146,18 +996,16 @@ def main():
 
             file.write("\n")
 
-            # ----------------------------------------------------
+            # ----------------------------------------------------------
             # Selected thermodynamic states
-            # ----------------------------------------------------
+            # ----------------------------------------------------------
 
             file.write(
                 "============================================================\n"
             )
-
             file.write(
                 "SELECTED THERMODYNAMIC STATES\n"
             )
-
             file.write(
                 "============================================================\n\n"
             )
@@ -1176,18 +1024,16 @@ def main():
 
             file.write("\n")
 
-            # ----------------------------------------------------
+            # ----------------------------------------------------------
             # Phasor table
-            # ----------------------------------------------------
+            # ----------------------------------------------------------
 
             file.write(
                 "============================================================\n"
             )
-
             file.write(
                 "SPECTRAL PHASOR DATA\n"
             )
-
             file.write(
                 "============================================================\n\n"
             )
@@ -1218,18 +1064,16 @@ def main():
 
             file.write("\n")
 
-            # ----------------------------------------------------
+            # ----------------------------------------------------------
             # Transition results
-            # ----------------------------------------------------
+            # ----------------------------------------------------------
 
             file.write(
                 "============================================================\n"
             )
-
             file.write(
                 "THERMODYNAMIC FITTING RESULTS\n"
             )
-
             file.write(
                 "============================================================\n\n"
             )
@@ -1237,15 +1081,15 @@ def main():
             for result in transition_results:
 
                 transition_number = (
-                    result['transition_number']
+                    result["transition_number"]
                 )
 
                 initial_index = (
-                    result['initial_index']
+                    result["initial_index"]
                 )
 
                 final_index = (
-                    result['final_index']
+                    result["final_index"]
                 )
 
                 file.write(
@@ -1312,25 +1156,21 @@ def main():
 
                 file.write("\n")
 
-            # ----------------------------------------------------
+            # ----------------------------------------------------------
             # Final compact results table
-            # ----------------------------------------------------
+            # ----------------------------------------------------------
 
             file.write(
                 "============================================================\n"
             )
-
             file.write(
                 "FINAL RESULTS TABLE\n"
             )
-
             file.write(
                 "============================================================\n\n"
             )
 
-            headers = [
-                'Parameter'
-            ]
+            headers = ["Parameter"]
 
             for result in transition_results:
 
@@ -1343,9 +1183,7 @@ def main():
 
             rows = []
 
-            dG_row = [
-                'ΔG'
-            ]
+            dG_row = ["ΔG"]
 
             for result in transition_results:
 
@@ -1355,13 +1193,9 @@ def main():
                     f"{energy_unit}"
                 )
 
-            rows.append(
-                dG_row
-            )
+            rows.append(dG_row)
 
-            m_row = [
-                'm'
-            ]
+            m_row = ["m"]
 
             for result in transition_results:
 
@@ -1371,9 +1205,7 @@ def main():
                     f"{energy_unit}/x"
                 )
 
-            rows.append(
-                m_row
-            )
+            rows.append(m_row)
 
             column_widths = []
 
@@ -1392,7 +1224,6 @@ def main():
                 )
 
             def format_row(values):
-
                 return " ".join(
                     str(value).center(width)
                     for value, width in zip(
@@ -1402,15 +1233,15 @@ def main():
                 )
 
             file.write(
-                format_row(
-                    headers
-                )
+                format_row(headers)
                 +
                 "\n"
             )
 
             file.write(
-                "-" * (
+                "-"
+                *
+                (
                     sum(column_widths)
                     +
                     len(column_widths)
@@ -1424,22 +1255,30 @@ def main():
             for row in rows:
 
                 file.write(
-                    format_row(
-                        row
-                    )
+                    format_row(row)
                     +
                     "\n"
                 )
 
-        # ========================================================
-        # PHASOR DATA FILE
-        # ========================================================
+    except OSError as error:
 
-        phasor_file = (
-            output_directory
-            /
-            f"{base_name}_phasor.txt"
-        )
+        raise OSError(
+            f"Could not write the summary file:\n"
+            f"{summary_file}\n\n"
+            f"Reason: {error}"
+        ) from error
+
+    # ------------------------------------------------------------------
+    # PHASOR DATA FILE
+    # ------------------------------------------------------------------
+
+    phasor_file = (
+        output_directory
+        /
+        f"{base_name}_phasor.txt"
+    )
+
+    try:
 
         with open(
             phasor_file,
@@ -1463,28 +1302,34 @@ def main():
                     f"{s_value:.10g}\n"
                 )
 
-        # ========================================================
-        # TRANSITION DATA FILES
-        # ========================================================
+    except OSError as error:
 
-        transition_files = []
+        raise OSError(
+            f"Could not write the phasor data file:\n"
+            f"{phasor_file}\n\n"
+            f"Reason: {error}"
+        ) from error
 
-        for result in transition_results:
+    # ------------------------------------------------------------------
+    # TRANSITION DATA FILES
+    # ------------------------------------------------------------------
 
-            transition_number = (
-                result['transition_number']
-            )
+    transition_files = []
 
-            # ----------------------------------------------------
-            # Experimental rd vs x
-            # ----------------------------------------------------
+    for result in transition_results:
 
-            rd_file = (
-                output_directory
-                /
-                f"{base_name}_transition_"
-                f"{transition_number}_rd_vs_x.txt"
-            )
+        transition_number = (
+            result["transition_number"]
+        )
+
+        rd_file = (
+            output_directory
+            /
+            f"{base_name}_transition_"
+            f"{transition_number}_rd_vs_x.txt"
+        )
+
+        try:
 
             with open(
                 rd_file,
@@ -1497,8 +1342,8 @@ def main():
                 )
 
                 for x_value, r_value in zip(
-                    result['x'],
-                    result['r']
+                    result["x"],
+                    result["r"]
                 ):
 
                     file.write(
@@ -1506,46 +1351,176 @@ def main():
                         f"{r_value:.10g}\n"
                     )
 
-            transition_files.append(
-                rd_file
+        except OSError as error:
+
+            raise OSError(
+                f"Could not write the transition data file:\n"
+                f"{rd_file}\n\n"
+                f"Reason: {error}"
+            ) from error
+
+        transition_files.append(
+            rd_file
+        )
+
+    # ------------------------------------------------------------------
+    # Print exported files
+    # ------------------------------------------------------------------
+
+    print(
+        "\nAll analysis data were exported to:"
+    )
+
+    print(
+        output_directory
+    )
+
+    print(
+        f"\nSummary:"
+        f"\n  {summary_file.name}"
+    )
+
+    print(
+        f"\nPhasor data:"
+        f"\n  {phasor_file.name}"
+    )
+
+    print(
+        "\nTransition data:"
+    )
+
+    for file_path in transition_files:
+
+        print(
+            f"  {file_path.name}"
+        )
+
+
+# ======================================================================
+# PRINT FINAL RESULTS TABLE
+# ======================================================================
+
+def print_results_table(
+    transition_results,
+    energy_unit
+):
+    """Print the final thermodynamic fitting results."""
+
+    print(
+        "\n\n=============================================="
+    )
+
+    print(
+        " Thermodynamic fitting results"
+    )
+
+    print(
+        "==============================================\n"
+    )
+
+    headers = [
+        "Parameter"
+    ]
+
+    for result in transition_results:
+
+        headers.append(
+            f"State "
+            f"{result['transition_number']} ↔ "
+            f"State "
+            f"{result['transition_number'] + 1}"
+        )
+
+    rows = []
+
+    dG_row = [
+        "ΔG"
+    ]
+
+    for result in transition_results:
+
+        dG_row.append(
+            f"{result['dG']:.6g} ± "
+            f"{result['dG_error']:.3g} "
+            f"{energy_unit}"
+        )
+
+    rows.append(
+        dG_row
+    )
+
+    m_row = [
+        "m"
+    ]
+
+    for result in transition_results:
+
+        m_row.append(
+            f"{result['m']:.6g} ± "
+            f"{result['m_error']:.3g} "
+            f"{energy_unit}/x"
+        )
+
+    rows.append(
+        m_row
+    )
+
+    column_widths = []
+
+    for column in zip(
+        headers,
+        *rows
+    ):
+
+        width = max(
+            len(str(value))
+            for value in column
+        )
+
+        column_widths.append(
+            width + 4
+        )
+
+    def format_row(values):
+
+        return " ".join(
+            str(value).center(width)
+            for value, width in zip(
+                values,
+                column_widths
             )
-
-        # ========================================================
-        # PRINT EXPORTED FILES
-        # ========================================================
-
-        print(
-            "\nAll analysis data were exported to:"
         )
 
+    print(
+        format_row(headers)
+    )
+
+    print(
+        "-"
+        *
+        (
+            sum(column_widths)
+            +
+            len(column_widths)
+            -
+            1
+        )
+    )
+
+    for row in rows:
+
         print(
-            output_directory
+            format_row(row)
         )
 
-        print(
-            f"\nSummary:"
-            f"\n  {summary_file.name}"
-        )
-
-        print(
-            f"\nPhasor data:"
-            f"\n  {phasor_file.name}"
-        )
-
-        print(
-            "\nTransition data:"
-        )
-
-        for file_path in transition_files:
-
-            print(
-                f"  {file_path.name}"
-            )
+    print()
 
 
-    # ============================================================
-    # MAIN PROGRAM
-    # ============================================================
+# ======================================================================
+# MAIN PROGRAM
+# ======================================================================
+
+def main():
 
     print(
         "\n=============================================="
@@ -1559,23 +1534,31 @@ def main():
         "==============================================\n"
     )
 
+    # ------------------------------------------------------------------
+    # Load data
+    # ------------------------------------------------------------------
 
-    # ============================================================
-    # LOAD DATA
-    # ============================================================
+    try:
 
-    (
-        wavelengths,
-        spectra,
-        labels,
-        x_values,
-        condition
-    ) = load_data_with_x_values()
+        (
+            wavelengths,
+            spectra,
+            labels,
+            x_values,
+            condition
+        ) = load_data_with_x_values()
 
+    except Exception as error:
 
-    # ============================================================
-    # VALIDATE LOADED DATA
-    # ============================================================
+        raise RuntimeError(
+            "The spectral data could not be loaded.\n"
+            "The problem occurred while reading the selected "
+            "folder, files, file format, or header."
+        ) from error
+
+    # ------------------------------------------------------------------
+    # Validate loaded data
+    # ------------------------------------------------------------------
 
     if x_values is None:
 
@@ -1606,10 +1589,22 @@ def main():
             "the number of spectra."
         )
 
+    if not np.all(
+        np.isfinite(
+            np.asarray(
+                x_values,
+                dtype=float
+            )
+        )
+    ):
 
-    # ============================================================
-    # SORT SPECTRA NUMERICALLY
-    # ============================================================
+        raise ValueError(
+            "The experimental x-values contain non-finite values."
+        )
+
+    # ------------------------------------------------------------------
+    # Sort spectra numerically
+    # ------------------------------------------------------------------
 
     (
         wavelengths,
@@ -1623,10 +1618,9 @@ def main():
         x_values
     )
 
-
-    # ============================================================
-    # DISPLAY LOADED SPECTRA
-    # ============================================================
+    # ------------------------------------------------------------------
+    # Display loaded spectra
+    # ------------------------------------------------------------------
 
     print(
         "\nSpectra loaded for thermodynamic analysis:"
@@ -1653,36 +1647,50 @@ def main():
             f"(x = {x_value})"
         )
 
+    # ------------------------------------------------------------------
+    # Temperature and energy units
+    # ------------------------------------------------------------------
 
-    # ============================================================
-    # TEMPERATURE AND ENERGY UNITS
-    # ============================================================
+    (
+        temperature,
+        gas_constant,
+        energy_unit
+    ) = select_temperature_and_units()
 
-    T, R, energy_unit = (
-        select_temperature_and_units()
-    )
+    # ------------------------------------------------------------------
+    # Calculate spectral phasors
+    # ------------------------------------------------------------------
 
+    try:
 
-    # ============================================================
-    # CALCULATE SPECTRAL PHASORS
-    # ============================================================
-
-    G_values = np.array([
-        G(
-            wavelengths,
-            spectrum
+        G_values = np.array(
+            [
+                G(
+                    wavelengths,
+                    spectrum
+                )
+                for spectrum in spectra
+            ],
+            dtype=float
         )
-        for spectrum in spectra
-    ])
 
-    S_values = np.array([
-        S(
-            wavelengths,
-            spectrum
+        S_values = np.array(
+            [
+                S(
+                    wavelengths,
+                    spectrum
+                )
+                for spectrum in spectra
+            ],
+            dtype=float
         )
-        for spectrum in spectra
-    ])
 
+    except (ValueError, TypeError, ZeroDivisionError) as error:
+
+        raise ValueError(
+            "Spectral phasor coordinates could not be calculated.\n"
+            "Check the wavelength and fluorescence data."
+        ) from error
 
     if not np.all(
         np.isfinite(G_values)
@@ -1704,17 +1712,15 @@ def main():
             "Check the wavelength and fluorescence data."
         )
 
-
-    # ============================================================
-    # SELECT THERMODYNAMIC STATES
-    # ============================================================
+    # ------------------------------------------------------------------
+    # Select thermodynamic states
+    # ------------------------------------------------------------------
 
     state_indices = (
         select_thermodynamic_states(
             len(spectra)
         )
     )
-
 
     print(
         "\nSelected thermodynamic states:"
@@ -1736,80 +1742,92 @@ def main():
             f"x = {x_values[index]})"
         )
 
+    # ------------------------------------------------------------------
+    # Spectra figure
+    # ------------------------------------------------------------------
 
-    # ============================================================
-    # SPECTRA FIGURE
-    # ============================================================
+    try:
 
-    fig_spectra, ax_spectra = (
-        plt.subplots(
-            figsize=(8, 6)
+        fig_spectra, ax_spectra = (
+            plt.subplots(
+                figsize=(8, 6)
+            )
         )
-    )
 
-    _, colors = create_spectra_plot(
-        ax_spectra,
-        wavelengths,
-        spectra,
-        labels=labels
-    )
-
-    ax_spectra.set_title(
-        "Fluorescence spectra",
-        fontsize=18
-    )
-
-    fig_spectra.tight_layout()
-
-
-    # ============================================================
-    # PHASOR FIGURE
-    # ============================================================
-
-    fig_phasor, ax_phasor = (
-        plt.subplots(
-            figsize=(7, 7)
+        _, colors = create_spectra_plot(
+            ax_spectra,
+            wavelengths,
+            spectra,
+            labels=labels
         )
-    )
 
-    create_phasor_plot(
-        ax_phasor,
-        universal_circle=UNIVERSAL_CIRCLE,
-        grid=GRID
-    )
+        ax_spectra.set_title(
+            "Fluorescence spectra",
+            fontsize=18
+        )
 
-    plot_phasor_trajectory(
-        ax_phasor,
-        G_values,
-        S_values,
-        colors
-    )
+        fig_spectra.tight_layout()
 
-    plot_state_connections(
-        ax_phasor,
-        G_values,
-        S_values,
-        state_indices
-    )
+    except Exception as error:
 
-    ax_phasor.set_title(
-        "Spectral phasor plot",
-        fontsize=18
-    )
+        raise RuntimeError(
+            "The fluorescence spectra figure could not be created."
+        ) from error
 
-    fig_phasor.tight_layout()
+    # ------------------------------------------------------------------
+    # Phasor figure
+    # ------------------------------------------------------------------
 
+    try:
 
-    # ============================================================
-    # THERMODYNAMIC ANALYSIS
-    # ============================================================
+        fig_phasor, ax_phasor = (
+            plt.subplots(
+                figsize=(7, 7)
+            )
+        )
+
+        create_phasor_plot(
+            ax_phasor,
+            universal_circle=UNIVERSAL_CIRCLE,
+            grid=GRID
+        )
+
+        plot_phasor_trajectory(
+            ax_phasor,
+            G_values,
+            S_values,
+            colors
+        )
+
+        plot_state_connections(
+            ax_phasor,
+            G_values,
+            S_values,
+            state_indices
+        )
+
+        ax_phasor.set_title(
+            "Spectral phasor plot",
+            fontsize=18
+        )
+
+        fig_phasor.tight_layout()
+
+    except Exception as error:
+
+        raise RuntimeError(
+            "The spectral phasor figure could not be created."
+        ) from error
+
+    # ------------------------------------------------------------------
+    # Thermodynamic analysis
+    # ------------------------------------------------------------------
 
     transition_results = []
 
     number_of_transitions = (
         len(state_indices) - 1
     )
-
 
     for transition_number in range(
         number_of_transitions
@@ -1853,8 +1871,8 @@ def main():
             G_values,
             S_values,
             x_values,
-            T,
-            R
+            temperature,
+            gas_constant
         )
 
         transition_results.append(
@@ -1875,67 +1893,67 @@ def main():
             f"{energy_unit}/x"
         )
 
-
-    # ============================================================
-    # THERMODYNAMIC FIGURES
-    # ============================================================
+    # ------------------------------------------------------------------
+    # Thermodynamic figures
+    # ------------------------------------------------------------------
 
     thermodynamic_figures = []
     thermodynamic_axes = []
 
-
     for result in transition_results:
 
-        fig, ax = plt.subplots(
-            figsize=(7, 7)
-        )
+        try:
 
-        # --------------------------------------------------------
-        # Experimental data
-        # --------------------------------------------------------
+            fig, ax = plt.subplots(
+                figsize=(7, 7)
+            )
 
-        graph(
-            result['x'],
-            result['r'],
-            ax,
-            color='#0084a5',
-            xlabel=condition,
-            ylabel='Relative distance',
-            tipo='scatter',
-            markersize=120
-        )
+            # Experimental data
 
-        # --------------------------------------------------------
-        # Thermodynamic fit
-        # --------------------------------------------------------
+            plot_thermodynamic_graph(
+                result["x"],
+                result["r"],
+                ax,
+                color="#0084a5",
+                xlabel=condition,
+                ylabel="Relative distance",
+                tipo="scatter",
+                markersize=120
+            )
 
-        graph(
-            result['x_fit'],
-            result['y_fit'],
-            ax,
-            color='red',
-            xlabel=condition,
-            ylabel='Relative distance',
-            tipo='line',
-            linewidth=2.5
-        )
+            # Thermodynamic fit
 
-        # --------------------------------------------------------
-        # Title shown on screen
-        # --------------------------------------------------------
+            plot_thermodynamic_graph(
+                result["x_fit"],
+                result["y_fit"],
+                ax,
+                color="red",
+                xlabel=condition,
+                ylabel="Relative distance",
+                tipo="line",
+                linewidth=2.5
+            )
 
-        ax.set_title(
-            f"State "
-            f"{result['transition_number']} ↔ "
-            f"State "
-            f"{result['transition_number'] + 1}",
-            fontsize=18
-        )
+            # Title shown on screen
 
-        # Square aspect ratio
-        ax.set_box_aspect(1)
+            ax.set_title(
+                f"State "
+                f"{result['transition_number']} ↔ "
+                f"State "
+                f"{result['transition_number'] + 1}",
+                fontsize=18
+            )
 
-        fig.tight_layout()
+            ax.set_box_aspect(1)
+
+            fig.tight_layout()
+
+        except Exception as error:
+
+            raise RuntimeError(
+                f"The thermodynamic figure for transition "
+                f"{result['transition_number']} could not be created."
+            ) from error
 
         thermodynamic_figures.append(
             fig
@@ -1945,163 +1963,21 @@ def main():
             ax
         )
 
+    # ------------------------------------------------------------------
+    # Final results table
+    # ------------------------------------------------------------------
 
-    # ============================================================
-    # FINAL RESULTS TABLE
-    # ============================================================
-
-    print(
-        "\n\n=============================================="
+    print_results_table(
+        transition_results,
+        energy_unit
     )
 
-    print(
-        " Thermodynamic fitting results"
-    )
-
-    print(
-        "==============================================\n"
-    )
-
-
-    # ============================================================
-    # CREATE TABLE COLUMNS
-    # ============================================================
-
-    headers = [
-        'Parameter'
-    ]
-
-
-    for result in transition_results:
-
-        headers.append(
-            f"State "
-            f"{result['transition_number']} ↔ "
-            f"State "
-            f"{result['transition_number'] + 1}"
-        )
-
-
-    rows = []
-
-
-    # ------------------------------------------------------------
-    # ΔG row
-    # ------------------------------------------------------------
-
-    dG_row = [
-        'ΔG'
-    ]
-
-
-    for result in transition_results:
-
-        dG_row.append(
-            f"{result['dG']:.6g} ± "
-            f"{result['dG_error']:.3g} "
-            f"{energy_unit}"
-        )
-
-
-    rows.append(
-        dG_row
-    )
-
-
-    # ------------------------------------------------------------
-    # m row
-    # ------------------------------------------------------------
-
-    m_row = [
-        'm'
-    ]
-
-
-    for result in transition_results:
-
-        m_row.append(
-            f"{result['m']:.6g} ± "
-            f"{result['m_error']:.3g} "
-            f"{energy_unit}/x"
-        )
-
-
-    rows.append(
-        m_row
-    )
-
-
-    # ============================================================
-    # DETERMINE COLUMN WIDTHS
-    # ============================================================
-
-    column_widths = []
-
-
-    for column in zip(
-        headers,
-        *rows
-    ):
-
-        width = max(
-            len(str(value))
-            for value in column
-        )
-
-        column_widths.append(
-            width + 4
-        )
-
-
-    # ============================================================
-    # PRINT TABLE
-    # ============================================================
-
-    def format_row(values):
-
-        return " ".join(
-            str(value).center(width)
-            for value, width in zip(
-                values,
-                column_widths
-            )
-        )
-
-
-    print(
-        format_row(
-            headers
-        )
-    )
-
-    print(
-        "-" * (
-            sum(column_widths)
-            +
-            len(column_widths)
-            -
-            1
-        )
-    )
-
-
-    for row in rows:
-
-        print(
-            format_row(
-                row
-            )
-        )
-
-
-    print()
-
-
-    # ============================================================
-    # SHOW FIGURES
-    # ============================================================
+    # ------------------------------------------------------------------
+    # Display figures
+    # ------------------------------------------------------------------
 
     # Figures are displayed WITH their titles.
+
     plt.show(
         block=False
     )
@@ -2110,21 +1986,18 @@ def main():
         0.1
     )
 
-
-    # ============================================================
-    # SAVE FIGURES
-    # ============================================================
+    # ------------------------------------------------------------------
+    # Save figures
+    # ------------------------------------------------------------------
 
     save = input(
         "\nSave figures to the 'output' folder? [y/n]: "
     ).strip().lower()
 
-
     base_name = None
     output_directory = None
 
-
-    if save == 'y':
+    if save == "y":
 
         base_name = input(
             "Enter a name for the figures: "
@@ -2133,12 +2006,18 @@ def main():
         if not base_name:
 
             base_name = (
-                'thermodynamic_analysis'
+                "thermodynamic_analysis"
             )
 
-        # --------------------------------------------------------
-        # Select figure format
-        # --------------------------------------------------------
+        base_name = Path(
+            base_name
+        ).stem
+
+        if not base_name:
+
+            raise ValueError(
+                "The output file name is empty or invalid."
+            )
 
         print(
             "\nSelect figure format:"
@@ -2171,24 +2050,30 @@ def main():
                 "Please select 1 or 2."
             )
 
-        # --------------------------------------------------------
-        # Output directory
-        # --------------------------------------------------------
-
         output_directory = (
             PROJECT_DIR
             /
-            'output'
+            "output"
         )
 
-        output_directory.mkdir(
-            parents=True,
-            exist_ok=True
-        )
+        try:
 
-        # --------------------------------------------------------
-        # Save spectra WITHOUT title
-        # --------------------------------------------------------
+            output_directory.mkdir(
+                parents=True,
+                exist_ok=True
+            )
+
+        except OSError as error:
+
+            raise OSError(
+                "The 'output' directory could not be created.\n"
+                f"Directory: {output_directory}\n"
+                f"Reason: {error}"
+            ) from error
+
+        # --------------------------------------------------------------
+        # Save spectra
+        # --------------------------------------------------------------
 
         spectra_file = (
             output_directory
@@ -2203,9 +2088,9 @@ def main():
             figure_format
         )
 
-        # --------------------------------------------------------
-        # Save phasor WITHOUT title
-        # --------------------------------------------------------
+        # --------------------------------------------------------------
+        # Save phasor
+        # --------------------------------------------------------------
 
         phasor_file = (
             output_directory
@@ -2220,9 +2105,9 @@ def main():
             figure_format
         )
 
-        # --------------------------------------------------------
-        # Save thermodynamic figures WITHOUT title
-        # --------------------------------------------------------
+        # --------------------------------------------------------------
+        # Save thermodynamic figures
+        # --------------------------------------------------------------
 
         transition_files = []
 
@@ -2233,9 +2118,7 @@ def main():
         ):
 
             transition_number = (
-                result[
-                    'transition_number'
-                ]
+                result["transition_number"]
             )
 
             transition_file = (
@@ -2275,8 +2158,7 @@ def main():
                 f"  {file_path.name}"
             )
 
-
-    elif save == 'n':
+    elif save == "n":
 
         print(
             "\nFigures were not saved."
@@ -2289,22 +2171,18 @@ def main():
             "Figures were not saved."
         )
 
-
-    # ============================================================
-    # EXPORT ALL ANALYSIS DATA
-    # ============================================================
+    # ------------------------------------------------------------------
+    # Export analysis data
+    # ------------------------------------------------------------------
 
     export = input(
         "\nExport all analysis data and results? [y/n]: "
     ).strip().lower()
 
+    if export == "y":
 
-    if export == 'y':
-
-        # --------------------------------------------------------
         # If figures were not saved, ask for an export name.
         # If figures were saved, reuse the same base name.
-        # --------------------------------------------------------
 
         if base_name is None:
 
@@ -2315,29 +2193,41 @@ def main():
             if not base_name:
 
                 base_name = (
-                    'thermodynamic_analysis'
+                    "thermodynamic_analysis"
                 )
 
-        # --------------------------------------------------------
-        # Output directory
-        # --------------------------------------------------------
+            base_name = Path(
+                base_name
+            ).stem
+
+            if not base_name:
+
+                raise ValueError(
+                    "The output file name is empty or invalid."
+                )
 
         if output_directory is None:
 
             output_directory = (
                 PROJECT_DIR
                 /
-                'output'
+                "output"
             )
 
-            output_directory.mkdir(
-                parents=True,
-                exist_ok=True
-            )
+            try:
 
-        # --------------------------------------------------------
-        # Export analysis data
-        # --------------------------------------------------------
+                output_directory.mkdir(
+                    parents=True,
+                    exist_ok=True
+                )
+
+            except OSError as error:
+
+                raise OSError(
+                    "The 'output' directory could not be created.\n"
+                    f"Directory: {output_directory}\n"
+                    f"Reason: {error}"
+                ) from error
 
         export_all_analysis_data(
             output_directory,
@@ -2349,13 +2239,12 @@ def main():
             S_values,
             state_indices,
             transition_results,
-            T,
-            R,
+            temperature,
+            gas_constant,
             energy_unit
         )
 
-
-    elif export == 'n':
+    elif export == "n":
 
         print(
             "\nAnalysis data were not exported."
@@ -2368,13 +2257,16 @@ def main():
             "Analysis data were not exported."
         )
 
-
-    # ============================================================
-    # KEEP FIGURES OPEN
-    # ============================================================
+    # ------------------------------------------------------------------
+    # Keep figures open
+    # ------------------------------------------------------------------
 
     plt.show()
 
+
+# ======================================================================
+# PROGRAM ENTRY POINT
+# ======================================================================
 
 if __name__ == "__main__":
 

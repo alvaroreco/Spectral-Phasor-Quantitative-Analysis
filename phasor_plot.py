@@ -5,7 +5,7 @@ This script:
     - Loads fluorescence spectra.
     - Calculates spectral phasor coordinates.
     - Displays the spectra and phasor trajectory.
-    - Optionally saves G/S data as CSV or TXT.
+    - Optionally saves G/S data.
     - Optionally saves figures.
 
 All generated files are stored in the 'output' directory.
@@ -13,6 +13,7 @@ All generated files are stored in the 'output' directory.
 Spectrum labels are used only as identifiers in this analysis.
 They do not need to be numerical.
 """
+
 
 from pathlib import Path
 import sys
@@ -49,292 +50,449 @@ from phasor_functions import (
 
 
 # =============================================================================
-# LOAD DATA
+# ERROR REPORTING
 # =============================================================================
 
-(
-    wavelengths,
-    spectra,
-    labels,
-    condition
-) = load_data_with_condition()
+def report_error(error):
+    """Display a user-friendly error message."""
 
+    print("\n" + "=" * 70)
+    print(
+        "ERROR: The spectral phasor analysis "
+        "could not be completed."
+    )
+    print("=" * 70)
 
-# =============================================================================
-# CALCULATE SPECTRAL PHASORS
-# =============================================================================
+    print("\n" + str(error))
 
-G_values = np.array(
-    [
-        G(wavelengths, spectrum)
-        for spectrum in spectra
-    ]
-)
+    print("\nPlease check the following:")
+    print("  - The selected data folder is correct.")
+    print("  - The selected file format matches the data.")
+    print("  - The selected files contain spectral data.")
+    print("  - The number of header rows is correct.")
+    print("  - Wavelength values are numerical.")
+    print("  - Fluorescence intensity values are numerical.")
+    print("  - All selected spectra use the same wavelength axis.")
+    print("  - At least two spectra are available.")
+    print("  - The spectra contain finite intensity values.")
+    print("  - The output folder can be written if saving is requested.")
 
-S_values = np.array(
-    [
-        S(wavelengths, spectrum)
-        for spectrum in spectra
-    ]
-)
+    print("\nTechnical information:")
+    print(f"  Error type: {type(error).__name__}")
 
-
-# =============================================================================
-# SPECTRA FIGURE
-# =============================================================================
-
-fig_spectra, ax_spectra = plt.subplots(
-    figsize=(8, 6)
-)
-
-_, colors = create_spectra_plot(
-    ax_spectra,
-    wavelengths,
-    spectra,
-    labels=labels
-)
-
-fig_spectra.tight_layout()
+    print("\nNo further analysis was performed.")
+    print("=" * 70)
 
 
 # =============================================================================
-# PHASOR FIGURE
+# MAIN ANALYSIS
 # =============================================================================
 
-fig_phasor, ax_phasor = plt.subplots(
-    figsize=(7, 7)
-)
+def main():
 
-create_phasor_plot(
-    ax_phasor,
-    universal_circle=False,
-    grid=True
-)
+    # -------------------------------------------------------------------------
+    # Load data
+    # -------------------------------------------------------------------------
 
-plot_phasor_trajectory(
-    ax_phasor,
-    G_values,
-    S_values,
-    colors
-)
+    (
+        wavelengths,
+        spectra,
+        labels,
+        condition
+    ) = load_data_with_condition()
 
-fig_phasor.tight_layout()
+    # -------------------------------------------------------------------------
+    # Calculate spectral phasors
+    # -------------------------------------------------------------------------
 
+    G_values = np.asarray(
+        [
+            G(
+                wavelengths,
+                spectrum
+            )
+            for spectrum in spectra
+        ],
+        dtype=float
+    )
 
-# =============================================================================
-# DISPLAY FIGURES
-# =============================================================================
+    S_values = np.asarray(
+        [
+            S(
+                wavelengths,
+                spectrum
+            )
+            for spectrum in spectra
+        ],
+        dtype=float
+    )
 
-plt.show(block=False)
-plt.pause(0.1)
+    if not np.all(np.isfinite(G_values)):
 
-
-# =============================================================================
-# OUTPUT DIRECTORY
-# =============================================================================
-
-OUTPUT_DIR = PROJECT_DIR / "output"
-
-OUTPUT_DIR.mkdir(
-    parents=True,
-    exist_ok=True
-)
-
-
-# =============================================================================
-# SAVE OPTIONS
-# =============================================================================
-
-save_data_option = input(
-    "\nSave spectral phasor data (G and S)? [y/n]: "
-).strip().lower()
-
-save_figures_option = input(
-    "\nSave figures to the 'output' folder? [y/n]: "
-).strip().lower()
-
-
-# =============================================================================
-# OUTPUT FILE NAME
-# =============================================================================
-
-save_data = save_data_option == "y"
-save_figures = save_figures_option == "y"
-
-if save_data or save_figures:
-
-    file_name = input(
-        "\nEnter a name for the output files: "
-    ).strip()
-
-    if not file_name:
-
-        file_name = "spectral_phasor_data"
-
-    file_name = Path(file_name).stem
-
-
-# =============================================================================
-# SAVE PHASOR DATA
-# =============================================================================
-
-if save_data:
-
-    output_format = input(
-        "\nSelect output format: "
-        "[1] CSV  [2] TXT (tab-delimited): "
-    ).strip()
-
-    # The first column contains the spectrum label.
-    # No numerical x-column is included here because this script
-    # does not perform quantitative thermodynamic analysis.
-    header = [
-        condition,
-        "G",
-        "S"
-    ]
-
-    if output_format == "1":
-
-        output_file = (
-            OUTPUT_DIR
-            / f"{file_name}_phasor.csv"
+        raise ValueError(
+            "The calculated Gλ phasor coordinates contain "
+            "non-finite values.\n\n"
+            "Possible causes:\n"
+            "  - A spectrum has a total intensity of zero.\n"
+            "  - The wavelength range is zero.\n"
+            "  - The spectral data contain invalid values."
         )
 
-        with open(
-            output_file,
-            "w",
-            encoding="utf-8"
-        ) as file:
+    if not np.all(np.isfinite(S_values)):
 
-            file.write(
-                ",".join(header)
-                + "\n"
-            )
+        raise ValueError(
+            "The calculated Sλ phasor coordinates contain "
+            "non-finite values.\n\n"
+            "Possible causes:\n"
+            "  - A spectrum has a total intensity of zero.\n"
+            "  - The wavelength range is zero.\n"
+            "  - The spectral data contain invalid values."
+        )
 
-            for label, g, s in zip(
-                labels,
-                G_values,
-                S_values
-            ):
+    # -------------------------------------------------------------------------
+    # Spectra figure
+    # -------------------------------------------------------------------------
 
-                file.write(
-                    f"{label},{g},{s}\n"
+    fig_spectra, ax_spectra = plt.subplots(
+        figsize=(8, 6)
+    )
+
+    _, colors = create_spectra_plot(
+        ax_spectra,
+        wavelengths,
+        spectra,
+        labels=labels
+    )
+
+    fig_spectra.tight_layout()
+
+    # -------------------------------------------------------------------------
+    # Phasor figure
+    # -------------------------------------------------------------------------
+
+    fig_phasor, ax_phasor = plt.subplots(
+        figsize=(7, 7)
+    )
+
+    create_phasor_plot(
+        ax_phasor,
+        universal_circle=False,
+        grid=True
+    )
+
+    plot_phasor_trajectory(
+        ax_phasor,
+        G_values,
+        S_values,
+        colors
+    )
+
+    fig_phasor.tight_layout()
+
+    # -------------------------------------------------------------------------
+    # Display figures
+    # -------------------------------------------------------------------------
+
+    plt.show(
+        block=False
+    )
+
+    plt.pause(
+        0.1
+    )
+
+    # -------------------------------------------------------------------------
+    # Output directory
+    # -------------------------------------------------------------------------
+
+    output_directory = (
+        PROJECT_DIR
+        / "output"
+    )
+
+    try:
+
+        output_directory.mkdir(
+            parents=True,
+            exist_ok=True
+        )
+
+    except OSError as error:
+
+        raise OSError(
+            "The 'output' directory could not be created.\n\n"
+            f"Path:\n{output_directory}\n\n"
+            "Please check that you have write permission "
+            "for the project directory."
+        ) from error
+
+    # -------------------------------------------------------------------------
+    # Save options
+    # -------------------------------------------------------------------------
+
+    save_data_option = input(
+        "\nSave spectral phasor data (G and S)? [y/n]: "
+    ).strip().lower()
+
+    save_figures_option = input(
+        "\nSave figures to the 'output' folder? [y/n]: "
+    ).strip().lower()
+
+    save_data = save_data_option == "y"
+    save_figures = save_figures_option == "y"
+
+    # -------------------------------------------------------------------------
+    # Output file name
+    # -------------------------------------------------------------------------
+
+    if save_data or save_figures:
+
+        file_name = input(
+            "\nEnter a name for the output files: "
+        ).strip()
+
+        if not file_name:
+            file_name = "spectral_phasor_data"
+
+        file_name = Path(
+            file_name
+        ).stem
+
+    # -------------------------------------------------------------------------
+    # Save phasor data
+    # -------------------------------------------------------------------------
+
+    if save_data:
+
+        output_format = input(
+            "\nSelect output format: "
+            "[1] CSV  [2] TXT (tab-delimited): "
+        ).strip()
+
+        header = [
+            condition,
+            "G",
+            "S"
+        ]
+
+        try:
+
+            if output_format == "1":
+
+                output_file = (
+                    output_directory
+                    / f"{file_name}_phasor.csv"
                 )
 
-        print(
-            "\nPhasor data saved as:"
-        )
+                with open(
+                    output_file,
+                    "w",
+                    encoding="utf-8"
+                ) as file:
 
-        print(output_file)
+                    file.write(
+                        ",".join(header)
+                        + "\n"
+                    )
 
-    elif output_format == "2":
+                    for label, g, s in zip(
+                        labels,
+                        G_values,
+                        S_values
+                    ):
 
-        output_file = (
-            OUTPUT_DIR
-            / f"{file_name}_phasor.txt"
-        )
+                        file.write(
+                            f"{label},{g},{s}\n"
+                        )
 
-        with open(
-            output_file,
-            "w",
-            encoding="utf-8"
-        ) as file:
+            elif output_format == "2":
 
-            file.write(
-                "\t".join(header)
-                + "\n"
-            )
-
-            for label, g, s in zip(
-                labels,
-                G_values,
-                S_values
-            ):
-
-                file.write(
-                    f"{label}\t{g}\t{s}\n"
+                output_file = (
+                    output_directory
+                    / f"{file_name}_phasor.txt"
                 )
 
-        print(
-            "\nPhasor data saved as:"
-        )
+                with open(
+                    output_file,
+                    "w",
+                    encoding="utf-8"
+                ) as file:
 
-        print(output_file)
+                    file.write(
+                        "\t".join(header)
+                        + "\n"
+                    )
+
+                    for label, g, s in zip(
+                        labels,
+                        G_values,
+                        S_values
+                    ):
+
+                        file.write(
+                            f"{label}\t{g}\t{s}\n"
+                        )
+
+            else:
+
+                print(
+                    "\nInvalid output format. "
+                    "Phasor data were not saved."
+                )
+
+                output_file = None
+
+            if output_file is not None:
+
+                print(
+                    "\nPhasor data saved as:"
+                )
+
+                print(
+                    output_file
+                )
+
+        except OSError as error:
+
+            raise OSError(
+                "The phasor data could not be saved.\n\n"
+                f"Output file:\n{output_file}\n\n"
+                "Possible causes:\n"
+                "  - The file is open in another program.\n"
+                "  - You do not have write permission.\n"
+                "  - The output directory cannot be accessed."
+            ) from error
+
+    elif save_data_option == "n":
+
+        print(
+            "\nPhasor data were not saved."
+        )
 
     else:
 
         print(
-            "\nInvalid output format. "
+            "\nInvalid option selected. "
             "Phasor data were not saved."
         )
 
-elif save_data_option == "n":
+    # -------------------------------------------------------------------------
+    # Save figures
+    # -------------------------------------------------------------------------
 
-    print(
-        "\nPhasor data were not saved."
-    )
+    if save_figures:
 
-else:
+        spectra_file = (
+            output_directory
+            / f"{file_name}_spectra.png"
+        )
 
-    print(
-        "\nInvalid option selected. "
-        "Phasor data were not saved."
-    )
+        phasor_file = (
+            output_directory
+            / f"{file_name}_phasor.png"
+        )
+
+        try:
+
+            fig_spectra.savefig(
+                spectra_file,
+                dpi=300,
+                bbox_inches="tight"
+            )
+
+            fig_phasor.savefig(
+                phasor_file,
+                dpi=300,
+                bbox_inches="tight"
+            )
+
+        except OSError as error:
+
+            raise OSError(
+                "The figures could not be saved.\n\n"
+                f"Output directory:\n{output_directory}\n\n"
+                "Possible causes:\n"
+                "  - The output file is open in another program.\n"
+                "  - You do not have write permission.\n"
+                "  - The output directory cannot be accessed."
+            ) from error
+
+        print(
+            "\nFigures saved in the 'output' folder:"
+        )
+
+        print(
+            spectra_file
+        )
+
+        print(
+            phasor_file
+        )
+
+    elif save_figures_option == "n":
+
+        print(
+            "\nFigures were not saved."
+        )
+
+    else:
+
+        print(
+            "\nInvalid option selected. "
+            "Figures were not saved."
+        )
+
+    # -------------------------------------------------------------------------
+    # Keep figures open
+    # -------------------------------------------------------------------------
+
+    plt.show()
 
 
 # =============================================================================
-# SAVE FIGURES
+# MAIN GUARD
 # =============================================================================
 
-if save_figures:
+if __name__ == "__main__":
 
-    spectra_file = (
-        OUTPUT_DIR
-        / f"{file_name}_spectra.png"
-    )
+    try:
 
-    phasor_file = (
-        OUTPUT_DIR
-        / f"{file_name}_phasor.png"
-    )
+        main()
 
-    fig_spectra.savefig(
-        spectra_file,
-        dpi=300,
-        bbox_inches="tight"
-    )
+    except KeyboardInterrupt:
 
-    fig_phasor.savefig(
-        phasor_file,
-        dpi=300,
-        bbox_inches="tight"
-    )
+        print(
+            "\n\nAnalysis interrupted by the user."
+        )
 
-    print(
-        "\nFigures saved in the 'output' folder:"
-    )
+    except (
+        FileNotFoundError,
+        NotADirectoryError,
+        ValueError,
+        RuntimeError,
+        OSError
+    ) as error:
 
-    print(spectra_file)
-    print(phasor_file)
+        report_error(
+            error
+        )
 
-elif save_figures_option == "n":
+    except Exception as error:
 
-    print(
-        "\nFigures were not saved."
-    )
+        print("\n" + "=" * 70)
+        print("UNEXPECTED ERROR")
+        print("=" * 70)
 
-else:
+        print(
+            f"\nError type: {type(error).__name__}"
+        )
 
-    print(
-        "\nInvalid option selected. "
-        "Figures were not saved."
-    )
+        print(
+            f"Message: {error}"
+        )
 
+        print(
+            "\nPlease report this message if the problem persists."
+        )
 
-# =============================================================================
-# KEEP FIGURES OPEN
-# =============================================================================
-
-plt.show()
-
+        print("=" * 70)

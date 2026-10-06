@@ -1,14 +1,20 @@
 """
 Functions for spectral phasor analysis.
 
-This module contains functions for calculating spectral phasor
-coordinates from fluorescence emission spectra, generating
-spectral phasor plots, visualizing fluorescence spectra, plotting
-selected thermodynamic states, and saving figures.
+This module contains functions for:
+    - calculating spectral phasor coordinates,
+    - generating spectral phasor plots,
+    - visualizing fluorescence spectra,
+    - plotting selected thermodynamic states,
+    - calculating thermodynamic quantities,
+    - plotting thermodynamic analysis results.
 
 The mathematical implementation of the spectral phasor
-coordinates is kept consistent with the analysis used in the
-associated publication.
+coordinates is kept consistent with the analysis used
+in the associated publication.
+
+File loading and output file saving are handled by the
+corresponding analysis scripts.
 """
 
 
@@ -18,26 +24,13 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import AutoMinorLocator
 
 
-# -------------------------------------------------------------------
-# Spectral phasor calculations
-# -------------------------------------------------------------------
+# =============================================================================
+# SPECTRAL PHASOR CALCULATIONS
+# =============================================================================
 
 def G(lambdas, I):
     """
     Calculate the Gλ spectral phasor coordinate.
-
-    Parameters
-    ----------
-    lambdas : array-like
-        Wavelength values.
-
-    I : array-like
-        Fluorescence intensity values.
-
-    Returns
-    -------
-    float
-        Gλ spectral phasor coordinate.
     """
 
     min_lambda = np.min(lambdas)
@@ -56,19 +49,6 @@ def G(lambdas, I):
 def S(lambdas, I):
     """
     Calculate the Sλ spectral phasor coordinate.
-
-    Parameters
-    ----------
-    lambdas : array-like
-        Wavelength values.
-
-    I : array-like
-        Fluorescence intensity values.
-
-    Returns
-    -------
-    float
-        Sλ spectral phasor coordinate.
     """
 
     min_lambda = np.min(lambdas)
@@ -87,19 +67,6 @@ def S(lambdas, I):
 def theta(G_value, S_value):
     """
     Calculate the angular coordinate of a spectral phasor.
-
-    Parameters
-    ----------
-    G_value : float
-        Gλ spectral phasor coordinate.
-
-    S_value : float
-        Sλ spectral phasor coordinate.
-
-    Returns
-    -------
-    float
-        Phasor angle in degrees.
     """
 
     return np.degrees(
@@ -110,19 +77,6 @@ def theta(G_value, S_value):
 def M(G_value, S_value):
     """
     Calculate the magnitude of a spectral phasor.
-
-    Parameters
-    ----------
-    G_value : float
-        Gλ spectral phasor coordinate.
-
-    S_value : float
-        Sλ spectral phasor coordinate.
-
-    Returns
-    -------
-    float
-        Phasor magnitude.
     """
 
     return np.sqrt(
@@ -130,9 +84,9 @@ def M(G_value, S_value):
     )
 
 
-# -------------------------------------------------------------------
-# Plot formatting
-# -------------------------------------------------------------------
+# =============================================================================
+# PLOT FORMATTING
+# =============================================================================
 
 def _format_axes(ax):
     """
@@ -140,32 +94,32 @@ def _format_axes(ax):
     """
 
     for side in [
-        'top',
-        'right',
-        'bottom',
-        'left'
+        "top",
+        "right",
+        "bottom",
+        "left"
     ]:
 
         ax.spines[side].set_linewidth(2)
 
     ax.tick_params(
-        axis='both',
-        which='major',
-        direction='in',
+        axis="both",
+        which="major",
+        direction="in",
         length=6,
         width=1.5
     )
 
     ax.tick_params(
-        axis='both',
-        which='minor',
-        direction='in',
+        axis="both",
+        which="minor",
+        direction="in",
         length=3,
         width=1.5
     )
 
     ax.tick_params(
-        axis='both',
+        axis="both",
         labelsize=16,
         pad=10
     )
@@ -176,64 +130,47 @@ def _format_axes(ax):
     ):
 
         label.set_fontfamily(
-            'sans-serif'
+            "sans-serif"
         )
 
 
-# -------------------------------------------------------------------
-# Fluorescence spectra
-# -------------------------------------------------------------------
+# =============================================================================
+# FLUORESCENCE SPECTRA
+# =============================================================================
 
 def create_spectra_plot(
     ax,
     wavelengths,
     spectra,
     labels=None,
-    colormap='winter'
+    colormap="winter"
 ):
     """
     Plot fluorescence emission spectra.
 
-    The first spectrum is displayed with a lighter color and the
-    last spectrum with a more saturated color. The same color
-    progression is used for the corresponding phasor points.
-
-    Parameters
-    ----------
-    ax : matplotlib.axes.Axes
-        Matplotlib axis on which the spectra will be plotted.
-
-    wavelengths : array-like
-        Wavelength values.
-
-    spectra : array-like
-        Fluorescence spectra.
-
-    labels : list, optional
-        Labels associated with each spectrum.
-
-    colormap : str, optional
-        Matplotlib colormap used to represent the spectral progression.
-        Default is 'Blues'.
-
-    Returns
-    -------
-    matplotlib.axes.Axes
-        The configured spectra plot axis.
-
-    numpy.ndarray
-        Colors assigned to each spectrum.
+    The same color progression is returned for use in the
+    corresponding phasor trajectory.
     """
 
-    spectra = np.asarray(spectra)
+    spectra = np.asarray(
+        spectra
+    )
 
     colors = plt.get_cmap(colormap)(
-        np.linspace(0.25, 1.0, len(spectra))
+        np.linspace(
+            0.25,
+            1.0,
+            len(spectra)
+        )
     )
 
     for i, spectrum in enumerate(spectra):
 
-        label = labels[i] if labels is not None else None
+        label = (
+            labels[i]
+            if labels is not None
+            else None
+        )
 
         ax.plot(
             wavelengths,
@@ -243,16 +180,18 @@ def create_spectra_plot(
             label=label
         )
 
-    _format_axes(ax)
+    _format_axes(
+        ax
+    )
 
     ax.set_xlabel(
-        'Wavelength (nm)',
+        "Wavelength (nm)",
         fontsize=20,
         labelpad=10
     )
 
     ax.set_ylabel(
-        'Fluorescence intensity',
+        "Fluorescence intensity",
         fontsize=20,
         labelpad=10
     )
@@ -268,9 +207,9 @@ def create_spectra_plot(
     return ax, colors
 
 
-# -------------------------------------------------------------------
-# Spectral phasor background
-# -------------------------------------------------------------------
+# =============================================================================
+# SPECTRAL PHASOR BACKGROUND
+# =============================================================================
 
 def create_phasor_plot(
     ax,
@@ -279,22 +218,6 @@ def create_phasor_plot(
 ):
     """
     Configure an axis for spectral phasor visualization.
-
-    Parameters
-    ----------
-    ax : matplotlib.axes.Axes
-        Matplotlib axis.
-
-    universal_circle : bool, optional
-        If True, display the universal semicircle.
-
-    grid : bool, optional
-        If True, display the phasor grid.
-
-    Returns
-    -------
-    matplotlib.axes.Axes
-        Configured phasor plot axis.
     """
 
     ax.clear()
@@ -333,8 +256,8 @@ def create_phasor_plot(
             ax.plot(
                 x,
                 y,
-                '-',
-                color='gray',
+                "-",
+                color="gray",
                 alpha=0.5,
                 linewidth=linewidth
             )
@@ -356,8 +279,8 @@ def create_phasor_plot(
             ax.plot(
                 [0, x],
                 [0, y],
-                '--',
-                color='gray',
+                "--",
+                color="gray",
                 alpha=0.4,
                 linewidth=1
             )
@@ -371,7 +294,7 @@ def create_phasor_plot(
         )
 
         x_semi = (
-            np.cos(phi)**2
+            np.cos(phi) ** 2
         )
 
         y_semi = (
@@ -382,17 +305,17 @@ def create_phasor_plot(
         ax.plot(
             x_semi,
             y_semi,
-            color='orange',
+            color="orange",
             linewidth=2
         )
 
     ax.set_xlabel(
-        r'$G_{\lambda}$',
+        r"$G_{\lambda}$",
         fontsize=22
     )
 
     ax.set_ylabel(
-        r'$S_{\lambda}$',
+        r"$S_{\lambda}$",
         fontsize=22
     )
 
@@ -405,16 +328,16 @@ def create_phasor_plot(
     )
 
     ax.set_aspect(
-        'equal',
-        adjustable='box'
+        "equal",
+        adjustable="box"
     )
 
     return ax
 
 
-# -------------------------------------------------------------------
-# Phasor plot limits
-# -------------------------------------------------------------------
+# =============================================================================
+# PHASOR PLOT LIMITS
+# =============================================================================
 
 def set_phasor_limits(
     ax,
@@ -495,9 +418,9 @@ def set_phasor_limits(
     )
 
 
-# -------------------------------------------------------------------
-# Phasor trajectory
-# -------------------------------------------------------------------
+# =============================================================================
+# PHASOR TRAJECTORY
+# =============================================================================
 
 def plot_phasor_trajectory(
     ax,
@@ -532,7 +455,7 @@ def plot_phasor_trajectory(
         S_values,
         c=colors,
         s=marker_size,
-        edgecolors='none'
+        edgecolors="none"
     )
 
     set_phasor_limits(
@@ -542,55 +465,22 @@ def plot_phasor_trajectory(
     )
 
 
-# -------------------------------------------------------------------
-# Selected thermodynamic states
-# -------------------------------------------------------------------
+# =============================================================================
+# SELECTED THERMODYNAMIC STATES
+# =============================================================================
 
 def plot_state_connections(
     ax,
     G_values,
     S_values,
     state_indices,
-    color='black',
+    color="black",
     line_width=2.5
 ):
     """
     Connect selected thermodynamic states sequentially.
 
-    The states are connected in the order provided by
-    state_indices.
-
     For n selected states, n-1 lines are drawn.
-
-    Examples
-    --------
-    Two states:
-
-        initial -------- final
-
-    Three states:
-
-        initial ---- intermediate ---- final
-
-    Parameters
-    ----------
-    ax : matplotlib.axes.Axes
-        Matplotlib axis.
-
-    G_values : array-like
-        Gλ phasor coordinates.
-
-    S_values : array-like
-        Sλ phasor coordinates.
-
-    state_indices : list of int
-        Indices of the selected states in experimental order.
-
-    color : str, optional
-        Line color.
-
-    line_width : float, optional
-        Line width.
     """
 
     G_values = np.asarray(
@@ -623,10 +513,9 @@ def plot_state_connections(
         )
 
 
-# -------------------------------------------------------------------
-# Thermodynamic analysis
-# -------------------------------------------------------------------
-
+# =============================================================================
+# THERMODYNAMIC ANALYSIS
+# =============================================================================
 
 def distance(
     G1,
@@ -639,9 +528,9 @@ def distance(
     """
 
     return np.sqrt(
-        (G2 - G1)**2
+        (G2 - G1) ** 2
         +
-        (S2 - S1)**2
+        (S2 - S1) ** 2
     )
 
 
@@ -688,36 +577,8 @@ def exp_phasor(
     R
 ):
     """
-    Two-state thermodynamic model for the relative spectral
-    phasor distance.
-
-    Parameters
-    ----------
-    x : array-like
-        Experimental variable.
-
-    I_initial : float
-        Integral of the initial-state spectrum.
-
-    I_final : float
-        Integral of the final-state spectrum.
-
-    dG : float
-        Standard free energy difference.
-
-    m : float
-        Dependence of the free energy on the experimental variable.
-
-    T : float
-        Temperature in Kelvin.
-
-    R : float
-        Gas constant in units consistent with dG.
-
-    Returns
-    -------
-    numpy.ndarray
-        Calculated relative distance.
+    Calculate the relative spectral phasor distance using
+    the two-state thermodynamic model.
     """
 
     exp_term = np.exp(
@@ -731,37 +592,35 @@ def exp_phasor(
         /
         (
             I_final
-            +
-            I_initial * exp_term
+            + I_initial * exp_term
         )
     )
 
 
-# -------------------------------------------------------------------
-# Thermodynamic plot
-# -------------------------------------------------------------------
-
+# =============================================================================
+# THERMODYNAMIC PLOT
+# =============================================================================
 
 def plot_thermodynamic_graph(
     x,
     y,
     ax,
-    color='#0084a5',
-    xlabel='x',
-    ylabel='Relative distance',
-    tipo='line'
+    color="#0084a5",
+    xlabel="x",
+    ylabel="Relative distance",
+    tipo="line"
 ):
     """
     Plot relative spectral phasor distance as a function
     of the experimental variable.
     """
 
-    ax.spines['top'].set_linewidth(2)
-    ax.spines['right'].set_linewidth(2)
-    ax.spines['bottom'].set_linewidth(2)
-    ax.spines['left'].set_linewidth(2)
+    ax.spines["top"].set_linewidth(2)
+    ax.spines["right"].set_linewidth(2)
+    ax.spines["bottom"].set_linewidth(2)
+    ax.spines["left"].set_linewidth(2)
 
-    if tipo == 'line':
+    if tipo == "line":
 
         ax.plot(
             x,
@@ -782,19 +641,19 @@ def plot_thermodynamic_graph(
     ax.set_xlabel(
         xlabel,
         fontsize=20,
-        fontname='sans-serif',
+        fontname="sans-serif",
         labelpad=10
     )
 
     ax.set_ylabel(
         ylabel,
         fontsize=20,
-        fontname='sans-serif',
+        fontname="sans-serif",
         labelpad=10
     )
 
     ax.tick_params(
-        axis='both',
+        axis="both",
         labelsize=16,
         pad=10
     )
@@ -808,68 +667,19 @@ def plot_thermodynamic_graph(
     )
 
     ax.tick_params(
-        axis='both',
-        which='major',
-        direction='in',
+        axis="both",
+        which="major",
+        direction="in",
         length=6,
         width=1.5
     )
 
     ax.tick_params(
-        axis='both',
-        which='minor',
-        direction='in',
+        axis="both",
+        which="minor",
+        direction="in",
         length=3,
         width=1.5
     )
 
     return ax
-# -------------------------------------------------------------------
-# Save figures
-# -------------------------------------------------------------------
-
-def save_figures(
-    fig_spectra,
-    fig_phasor,
-    output_directory,
-    base_name='spectral_phasor'
-):
-    """
-    Save the fluorescence spectra and spectral phasor figures.
-
-    Parameters
-    ----------
-    fig_spectra : matplotlib.figure.Figure
-        Fluorescence spectra figure.
-
-    fig_phasor : matplotlib.figure.Figure
-        Fluorescence phasor figure.
-
-    output_directory : pathlib.Path
-        Output directory.
-
-    base_name : str, optional
-        Base name for the figures.
-    """
-
-    output_directory.mkdir(
-        parents=True,
-        exist_ok=True
-    )
-
-    fig_spectra.savefig(
-        output_directory
-        / f'{base_name}_spectra.png',
-        dpi=300,
-        bbox_inches='tight'
-    )
-
-    fig_phasor.savefig(
-        output_directory
-        / f'{base_name}_phasor.png',
-        dpi=300,
-        bbox_inches='tight'
-    )
-
-
-
